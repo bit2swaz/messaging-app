@@ -2,11 +2,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client for the frontend
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Ensure environment variables are loaded
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Supabase URL or Anon Key are not defined in VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
 }
@@ -20,51 +18,54 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for an existing session on mount
+    console.log('AuthContext: Initializing session check...');
     const getSession = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (session) {
         setUser(session.user);
+        console.log('AuthContext: User session found:', session.user.id);
       } else if (error) {
-        console.error('Error getting session:', error.message);
+        console.error('AuthContext: Error getting session:', error.message);
       }
       setLoading(false);
+      console.log('AuthContext: Initial loading check complete. User:', session ? session.user.id : 'None');
     };
 
     getSession();
 
-    // Listen for auth state changes (login, logout, token refresh)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log('AuthContext: Auth state change event:', event, 'Session:', session);
         if (event === 'SIGNED_IN') {
           setUser(session.user);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
         }
-        setLoading(false); // Ensure loading is false after any auth change
+        setLoading(false);
       }
     );
 
-    // Cleanup the listener on component unmount
     return () => {
       authListener.subscription.unsubscribe();
+      console.log('AuthContext: Auth listener unsubscribed.');
     };
   }, []);
 
   const value = {
     user,
     loading,
-    supabase, // Provide the supabase client instance
+    supabase,
   };
+
+  console.log('AuthContext: Rendering with user:', user ? user.id : 'None', 'loading:', loading);
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children} {/* Render children only after initial loading check */}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook to use the AuthContext
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

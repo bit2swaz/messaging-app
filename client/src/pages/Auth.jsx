@@ -90,7 +90,7 @@ const Auth = () => {
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
           />
           <button type="submit">{isRegister ? 'Register' : 'Login'}</button>
