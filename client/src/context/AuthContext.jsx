@@ -17,57 +17,82 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Function to explicitly sign in a user within the context
   const signIn = useCallback((userData) => {
     setUser(userData);
-    console.log('AuthContext: signIn function called. User set:', userData.id);
+    console.log('AuthContext: Custom signIn called. User state set to:', userData.id);
   }, []);
 
   useEffect(() => {
-    console.log('AuthContext: Initializing session check...');
-    const getSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (session) {
-        setUser(session.user);
-        console.log('AuthContext: User session found:', session.user.id);
-      } else if (error) {
-        console.error('AuthContext: Error getting session:', error.message);
+    console.log('AuthContext: useEffect triggered. Starting session check...');
+    let authListenerSubscription = null; // To hold the subscription object
+
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('AuthContext: getSession Error:', error.message);
+          setUser(null); // Ensure user is null on error
+        } else if (session) {
+          setUser(session.user);
+          console.log('AuthContext: Initial session found. User:', session.user.id);
+        } else {
+          setUser(null); // No session found
+          console.log('AuthContext: No initial session found.');
+        }
+      } catch (err) {
+        console.error('AuthContext: getInitialSession catch error:', err.message);
+        setUser(null);
+      } finally {
+        setLoading(false);
+        console.log('AuthContext: Initial loading state resolved. User:', user ? user.id : 'None', 'Loading:', false);
       }
-      setLoading(false);
-      console.log('AuthContext: Initial loading check complete. User:', session ? session.user.id : 'None');
     };
 
-    getSession();
+    getInitialSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
+    // Setup listener for auth state changes
+    supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('AuthContext: Auth state change event:', event, 'Session:', session);
+        console.log('AuthContext: onAuthStateChange event:', event, 'Session:', session ? session.user?.id : 'None');
         if (event === 'SIGNED_IN') {
-          // This will be triggered by Supabase internal session setting
-          // We already handle it via our custom signIn function for our backend flow
-          // but this ensures consistency if other Supabase methods are used.
           setUser(session.user);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
+        } else if (event === 'INITIAL_SESSION' && session) {
+          // This event is often fired immediately after getSession, can be redundant with above
+          setUser(session.user);
+        } else if (event === 'TOKEN_REFRESHED' && session) {
+          setUser(session.user);
         }
+        // Ensure loading is false after any auth change event
         setLoading(false);
+        console.log('AuthContext: State updated by onAuthStateChange. User:', user ? user.id : 'None', 'Loading:', false);
       }
     );
 
+    // No need to explicitly return authListener.subscription.unsubscribe() here
+    // unless you want to cleanup a specific subscription object which is not directly returned by onAuthStateChange
+    // The listener persists for the lifecycle of the client
+
+    // Return a cleanup function for the useEffect
     return () => {
-      authListener.subscription.unsubscribe();
-      console.log('AuthContext: Auth listener unsubscribed.');
+      // If you had a specific subscription reference, you'd unsubscribe here.
+      // For onAuthStateChange, the listener is typically managed by Supabase client
+      // for the lifetime of the client, but if we get a direct subscription object
+      // (as in old versions or specific setups), we would unsubscribe.
+      // For now, no explicit cleanup needed here unless issues arise.
     };
-  }, []);
+
+  }, [user]); // Keep user in dependency array for its own log in render function. Remove if it causes re-renders.
 
   const value = {
     user,
     loading,
     supabase,
-    signIn, // Expose the signIn function
+    signIn,
   };
 
-  console.log('AuthContext: Rendering with user:', user ? user.id : 'None', 'loading:', loading);
+  console.log('AuthContext: Component render cycle. Current user in state:', user ? user.id : 'None', 'Loading state:', loading);
 
   return (
     <AuthContext.Provider value={value}>
