@@ -1,6 +1,6 @@
 // client/src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'; // <-- FIX IS HERE
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -19,15 +19,15 @@ export const AuthProvider = ({ children }) => {
 
   const signIn = useCallback((userData) => {
     setUser(userData);
-    console.log('AuthContext: Custom signIn called. User state set to:', userData ? userData.id : 'None');
+    console.log('AuthContext: Custom signIn called. User state set to:', userData.id);
   }, []);
 
   useEffect(() => {
-    console.log('AuthContext: useEffect triggered (runs once).');
-    let authListenerSubscription = null; // To explicitly manage the subscription
+    console.log('AuthContext: useEffect triggered. (Runs only once on mount).');
+    // We explicitly call getInitialSession only once
+    // And set up the auth state change listener once.
 
     const getInitialSession = async () => {
-      console.log('AuthContext: getInitialSession starting...');
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }) => {
           setUser(null);
         } else if (session) {
           setUser(session.user);
-          console.log('AuthContext: Initial session found. User ID:', session.user.id);
+          console.log('AuthContext: Initial session found. User:', session.user.id);
         } else {
           setUser(null);
           console.log('AuthContext: No initial session found.');
@@ -45,40 +45,42 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
       } finally {
         setLoading(false);
-        console.log('AuthContext: getInitialSession finished. Final loading:', false, 'User:', user ? user.id : 'None'); // Note: 'user' here might be stale
+        console.log('AuthContext: Initial loading state resolved. User:', user ? user.id : 'None', 'Loading:', false);
       }
     };
 
     getInitialSession();
 
     // Setup listener for auth state changes
-    authListenerSubscription = supabase.auth.onAuthStateChange(
+    const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('AuthContext: onAuthStateChange event:', event, 'Session User ID:', session ? session.user?.id : 'None', 'Timestamp:', new Date().toISOString());
-        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+        console.log('AuthContext: onAuthStateChange event:', event, 'Session:', session ? session.user?.id : 'None');
+        if (event === 'SIGNED_IN') {
           setUser(session.user);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
-        } else if (event === 'TOKEN_REFRESHED' && session) {
-          setUser(session.user);
         }
         setLoading(false); // Ensure loading is false after any auth change event
         console.log('AuthContext: State updated by onAuthStateChange. Current user:', session ? session.user?.id : 'None');
       }
-    ).data.subscription; // Store the subscription object
+    );
 
     // Return cleanup function to unsubscribe the listener when component unmounts
     return () => {
-      if (authListenerSubscription) {
-        authListenerSubscription.unsubscribe();
-        console.log('AuthContext: Auth listener unsubscribed (cleanup).');
-      }
+      authListener.subscription.unsubscribe();
+      console.log('AuthContext: Auth listener unsubscribed (cleanup).');
     };
 
-  }, []); // EMPTY DEPENDENCY ARRAY: This makes useEffect run ONLY ONCE on mount
+  }, []); // <-- EMPTY DEPENDENCY ARRAY: This makes useEffect run ONLY ONCE on mount
 
-  // Log on every render cycle of AuthProvider
-  console.log('AuthContext: AuthProvider RENDERING. Current user state (from useState):', user ? user.id : 'None', 'Loading state:', loading);
+  const value = {
+    user,
+    loading,
+    supabase,
+    signIn,
+  };
+
+  console.log('AuthContext: Component render cycle. Current user in state:', user ? user.id : 'None', 'Loading state:', loading);
 
   return (
     <AuthContext.Provider value={value}>
