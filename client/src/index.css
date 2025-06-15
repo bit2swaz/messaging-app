@@ -1,5 +1,8 @@
+/* client/src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -13,26 +16,37 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
 body {
   margin: 0;
   display: flex;
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #36393F; /* Discord dark background */
+  color: #DCDEE1; /* Light text color */
+}
+
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+  width: 100%;
+}
+
+a {
+  font-weight: 500;
+  color: #8C9EFF; /* Discord link color */
+  text-decoration: inherit;
+}
+a:hover {
+  color: #6C7DD6;
 }
 
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
+  color: #FFFFFF;
 }
 
 button {
@@ -42,27 +56,36 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: #5865F2; /* Discord button blue */
   cursor: pointer;
   transition: border-color 0.25s;
+  color: #FFFFFF;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: #6C7DD6;
+  background-color: #4752C4;
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  background-color: #40444B;
+  border: 1px solid #2F3136;
+  border-radius: 4px;
+  color: #DCDEE1;
+  padding: 10px;
+  margin-bottom: 15px;
+  width: 100%;
+  box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus {
+  outline: none;
+  border-color: #5865F2;
 }
