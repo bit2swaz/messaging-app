@@ -1,6 +1,6 @@
 // client/src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js'; // <-- FIX IS HERE
+import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -17,61 +17,58 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // This custom signIn is useful if we want to immediately update context state
+  // after our *backend* API call for login, rather than waiting for Supabase's
+  // internal onAuthStateChange listener to fire.
   const signIn = useCallback((userData) => {
     setUser(userData);
-    console.log('AuthContext: Custom signIn called. User state set to:', userData.id);
+    console.log('AuthContext: Custom signIn called. User state set:', userData ? userData.id : 'None');
   }, []);
 
   useEffect(() => {
-    console.log('AuthContext: useEffect triggered. (Runs only once on mount).');
-    // We explicitly call getInitialSession only once
-    // And set up the auth state change listener once.
+    console.log('AuthContext: useEffect (auth listener setup) triggered. Runs once.');
 
-    const getInitialSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error('AuthContext: getSession Error:', error.message);
-          setUser(null);
-        } else if (session) {
-          setUser(session.user);
-          console.log('AuthContext: Initial session found. User:', session.user.id);
-        } else {
-          setUser(null);
-          console.log('AuthContext: No initial session found.');
-        }
-      } catch (err) {
-        console.error('AuthContext: getInitialSession catch error:', err.message);
-        setUser(null);
-      } finally {
-        setLoading(false);
-        console.log('AuthContext: Initial loading state resolved. User:', user ? user.id : 'None', 'Loading:', false);
-      }
-    };
-
-    getInitialSession();
-
-    // Setup listener for auth state changes
+    // Listen for authentication state changes from Supabase
+    // This is the primary mechanism for getting the session and reacting to changes.
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('AuthContext: onAuthStateChange event:', event, 'Session:', session ? session.user?.id : 'None');
+      async (event, session) => {
+        console.log(`AuthContext: onAuthStateChange event: ${event}. Session: ${session ? session.user?.id : 'None'}.`);
+
         if (event === 'SIGNED_IN') {
+          // User has signed in or session was found on initial load
           setUser(session.user);
+          console.log('AuthContext: User SIGNED_IN. User ID:', session.user.id);
         } else if (event === 'SIGNED_OUT') {
+          // User has signed out
           setUser(null);
+          console.log('AuthContext: User SIGNED_OUT.');
+        } else if (event === 'INITIAL_SESSION' && session) {
+          // Initial session found when AuthProvider first loads
+          setUser(session.user);
+          console.log('AuthContext: INITIAL_SESSION found. User ID:', session.user.id);
+        } else if (event === 'TOKEN_REFRESHED' && session) {
+          // Session token refreshed
+          setUser(session.user);
+          console.log('AuthContext: TOKEN_REFRESHED. User ID:', session.user.id);
+        } else {
+          // Other events or initial session with no user
+          setUser(null);
+          console.log('AuthContext: Other event or no session. User set to null.');
         }
-        setLoading(false); // Ensure loading is false after any auth change event
-        console.log('AuthContext: State updated by onAuthStateChange. Current user:', session ? session.user?.id : 'None');
+        setLoading(false); // Once an auth state is determined, loading is complete.
+        console.log('AuthContext: Loading set to false. Current user (after event):', user ? user.id : 'None');
       }
     );
 
-    // Return cleanup function to unsubscribe the listener when component unmounts
+    // Clean up the listener when the component unmounts
     return () => {
       authListener.subscription.unsubscribe();
-      console.log('AuthContext: Auth listener unsubscribed (cleanup).');
+      console.log('AuthContext: Auth listener unsubscribed during cleanup.');
     };
+  }, []); // Empty dependency array: ensures this effect runs ONLY ONCE on mount
 
-  }, []); // <-- EMPTY DEPENDENCY ARRAY: This makes useEffect run ONLY ONCE on mount
+  // This log runs on every render of AuthProvider
+  console.log('AuthContext: AuthProvider RENDER CYCLE. User State:', user ? user.id : 'None', 'Loading State:', loading);
 
   const value = {
     user,
@@ -80,11 +77,9 @@ export const AuthProvider = ({ children }) => {
     signIn,
   };
 
-  console.log('AuthContext: Component render cycle. Current user in state:', user ? user.id : 'None', 'Loading state:', loading);
-
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {!loading && children} {/* Render children only when auth state is determined */}
     </AuthContext.Provider>
   );
 };
