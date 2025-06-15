@@ -3,7 +3,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-const verifyToken = require('./middleware/auth'); // Import the middleware
+const verifyToken = require('./middleware/auth');
 
 // Load environment variables from .env file
 dotenv.config();
@@ -17,8 +17,8 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Middleware
-app.use(cors()); // Enables CORS for all routes
-app.use(express.json()); // Parses incoming JSON requests
+app.use(cors());
+app.use(express.json());
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -27,7 +27,7 @@ app.get('/', (req, res) => {
 
 // Authentication Routes
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password, username } = req.body; // Username is for initial profile creation via trigger
+  const { email, password, username } = req.body;
 
   if (!email || !password || !username) {
     return res.status(400).json({ error: 'Email, password, and username are required.' });
@@ -39,7 +39,7 @@ app.post('/api/auth/register', async (req, res) => {
       password,
       options: {
         data: {
-          username: username // Pass username to options data for potential use in trigger or for client-side reference
+          username: username
         }
       }
     });
@@ -51,10 +51,6 @@ app.post('/api/auth/register', async (req, res) => {
       }
       return res.status(500).json({ error: authError.message });
     }
-
-    // The handle_new_user trigger should handle creating the profile entry
-    // However, if email confirmation is required, the user might not be fully
-    // registered until they confirm their email. The client should handle this.
 
     res.status(201).json({ message: 'User registered successfully. Please check your email for confirmation if email confirmation is enabled.', user: { id: authData.user.id, email: authData.user.email } });
 
@@ -82,13 +78,11 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: authError.message });
     }
 
+    // CRITICAL CHANGE: Return the entire session object
     res.status(200).json({
       message: 'Logged in successfully!',
-      accessToken: authData.session.access_token,
-      user: {
-        id: authData.user.id,
-        email: authData.user.email,
-      },
+      session: authData.session, // <-- SEND THE FULL SESSION OBJECT
+      user: authData.user,       // Also send user for convenience
     });
 
   } catch (error) {
@@ -114,12 +108,9 @@ app.post('/api/auth/logout', async (req, res) => {
 });
 
 // Example of a protected route
-// Only accessible if a valid JWT is provided in the Authorization header
 app.get('/api/protected-route', verifyToken, (req, res) => {
-  // req.user will contain the user data from the JWT
   res.status(200).json({ message: 'You accessed a protected route!', user: req.user });
 });
-
 
 // Start the server
 app.listen(port, () => {

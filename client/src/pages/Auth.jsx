@@ -1,6 +1,5 @@
 // client/src/pages/Auth.jsx
-import React, { useState, useEffect } from 'react'; // Keep useEffect, but its content will change
-// import { useNavigate } from 'react-router-dom'; // No longer needed for direct navigation in this component
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import styles from './Auth.module.css';
 
@@ -11,18 +10,10 @@ const Auth = () => {
   const [username, setUsername] = useState('');
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
-  const { user, signIn } = useAuth(); // We still need 'user' for internal component logic like clearing inputs after register
-  // const navigate = useNavigate(); // Removed, as App.jsx will handle navigation
+  const { user, signIn, supabase } = useAuth(); // Destructure supabase client here
 
-  // REMOVE THIS useEffect BLOCK ENTIRELY
-  // useEffect(() => {
-  //   console.log('Auth.jsx: Current user state in Auth component (useEffect):', user ? user.id : 'None');
-  //   if (user) {
-  //     console.log('Auth.jsx: User already logged in, navigating to /home.');
-  //     navigate('/home');
-  //   }
-  // }, [user, navigate]);
-
+  // We explicitly removed the useEffect for navigation here.
+  // App.jsx is now the sole component handling redirection based on the 'user' context.
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -60,10 +51,24 @@ const Auth = () => {
       setMessage(data.message);
       console.log('Auth.jsx: Success message received:', data.message);
 
-      if (!isRegister && data.accessToken) {
-        console.log('Auth.jsx: Login successful. Setting localStorage token and calling signIn context function.');
-        localStorage.setItem('supabase.auth.token', data.accessToken);
-        signIn(data.user); // Update AuthContext state, which App.jsx will react to for navigation
+      if (!isRegister && data.session) { // CRITICAL: Check for data.session
+        console.log('Auth.jsx: Login successful. Attempting to set Supabase session explicitly.');
+        // Set the full session object explicitly for the Supabase client
+        // This is the most reliable way to ensure the client is aware of the session.
+        const { error: sessionSetError } = await supabase.auth.setSession(data.session);
+
+        if (sessionSetError) {
+          console.error('Auth.jsx: Error setting Supabase session explicitly:', sessionSetError.message);
+          setError(`Login successful, but session setup failed: ${sessionSetError.message}`);
+          return; // Stop here if session setup fails
+        }
+
+        // After setSession, onAuthStateChange in AuthContext will be triggered
+        // and handle setting the user, which App.jsx will react to for navigation.
+        // We can still call signIn here for immediate UI update in case onAuthStateChange is slightly delayed.
+        signIn(data.user); // data.user is also returned for convenience
+        console.log('Auth.jsx: Supabase session explicitly set. AuthContext updated.');
+
       } else if (isRegister) {
         console.log('Auth.jsx: Registration success. User needs to login.');
         setIsRegister(false); // Switch to login form
@@ -71,8 +76,8 @@ const Auth = () => {
         setPassword('');
         setUsername('');
       } else {
-        console.warn('Auth.jsx: Login response missing access token or not register flow:', data);
-        setError('Login successful, but no session token received. Please try again or contact support.');
+        console.warn('Auth.jsx: Login response missing session or not register flow:', data);
+        setError('Login successful, but no session received. Please try again or contact support.');
       }
 
     } catch (err) {
