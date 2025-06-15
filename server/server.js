@@ -3,6 +3,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const verifyToken = require('./middleware/auth'); // Import the middleware
 
 // Load environment variables from .env file
 dotenv.config();
@@ -26,37 +27,36 @@ app.get('/', (req, res) => {
 
 // Authentication Routes
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password, username } = req.body;
+  const { email, password, username } = req.body; // Username is for initial profile creation via trigger
 
   if (!email || !password || !username) {
     return res.status(400).json({ error: 'Email, password, and username are required.' });
   }
 
   try {
-    // Sign up the user with Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          username: username // Pass username to options data for potential use in trigger or for client-side reference
+        }
+      }
     });
 
     if (authError) {
       console.error('Supabase Auth Error:', authError.message);
-      // Check if it's a duplicate user error
       if (authError.message.includes('already registered')) {
         return res.status(409).json({ error: 'User with this email already exists.' });
       }
       return res.status(500).json({ error: authError.message });
     }
 
-    const userId = authData.user.id;
+    // The handle_new_user trigger should handle creating the profile entry
+    // However, if email confirmation is required, the user might not be fully
+    // registered until they confirm their email. The client should handle this.
 
-    // Supabase trigger handle_new_user should automatically create the profile.
-    // However, if the trigger fails or you want to ensure the username is set
-    // from the body, you can explicitly update it here.
-    // For simplicity, we assume handle_new_user sets initial username,
-    // and profile update will handle changes.
-
-    res.status(201).json({ message: 'User registered successfully. Please check your email for confirmation if email confirmation is enabled.', user: { id: userId, email: authData.user.email } });
+    res.status(201).json({ message: 'User registered successfully. Please check your email for confirmation if email confirmation is enabled.', user: { id: authData.user.id, email: authData.user.email } });
 
   } catch (error) {
     console.error('Registration Catch Error:', error.message);
@@ -79,12 +79,9 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (authError) {
       console.error('Supabase Login Error:', authError.message);
-      return res.status(401).json({ error: authError.message }); // Invalid credentials etc.
+      return res.status(401).json({ error: authError.message });
     }
 
-    // A token (JWT) is returned by Supabase on successful login.
-    // We send this to the client, which will store it (e.g., in localStorage).
-    // The client will then use this token for authenticated requests.
     res.status(200).json({
       message: 'Logged in successfully!',
       accessToken: authData.session.access_token,
@@ -115,6 +112,14 @@ app.post('/api/auth/logout', async (req, res) => {
     res.status(500).json({ error: 'Internal server error during logout.' });
   }
 });
+
+// Example of a protected route
+// Only accessible if a valid JWT is provided in the Authorization header
+app.get('/api/protected-route', verifyToken, (req, res) => {
+  // req.user will contain the user data from the JWT
+  res.status(200).json({ message: 'You accessed a protected route!', user: req.user });
+});
+
 
 // Start the server
 app.listen(port, () => {
