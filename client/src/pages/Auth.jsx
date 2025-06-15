@@ -11,13 +11,14 @@ const Auth = () => {
   const [username, setUsername] = useState('');
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
-  const { user } = useAuth();
-  const navigate = useNavigate();
+  const { user, signIn } = useAuth(); // Destructure signIn function from useAuth
+  const navigate = useNavigate(); // Still need navigate for redirects if already logged in
 
   useEffect(() => {
-    // Debug log for user state in Auth component
-    console.log('Auth.jsx: Current user state in Auth component:', user ? user.id : 'None');
+    console.log('Auth.jsx: Current user state in Auth component (useEffect):', user ? user.id : 'None');
+    // If user is already set in context (e.g., from previous login persisting across refresh)
     if (user) {
+      console.log('Auth.jsx: User already logged in, navigating to /home.');
       navigate('/home');
     }
   }, [user, navigate]);
@@ -29,7 +30,6 @@ const Auth = () => {
 
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-    // Debug log before fetch call
     console.log('Auth.jsx: Submitting form. Type:', isRegister ? 'Register' : 'Login', 'Email:', email);
 
     try {
@@ -44,44 +44,49 @@ const Auth = () => {
         body: JSON.stringify(body),
       });
 
-      // Debug log after fetch but before parsing JSON
       console.log('Auth.jsx: Fetch response received. Status:', response.status, 'OK:', response.ok);
 
       const data = await response.json();
 
-      // Debug log for parsed data
       console.log('Auth.jsx: Response data:', data);
 
       if (!response.ok) {
-        // This block handles 4xx or 5xx responses from your Express backend
         const errorMessage = data.error || 'Something went wrong on the server.';
         console.error('Auth.jsx: Backend error response:', errorMessage);
-        throw new Error(errorMessage); // Propagate the error to the catch block
+        throw new Error(errorMessage);
       }
 
       setMessage(data.message);
       console.log('Auth.jsx: Success message received:', data.message);
 
       if (!isRegister && data.accessToken) {
-        // This block executes on successful login
-        console.log('Auth.jsx: Login successful. Storing accessToken and navigating.');
+        console.log('Auth.jsx: Login successful. Setting localStorage token.');
         localStorage.setItem('supabase.auth.token', data.accessToken);
-        // AuthContext's onAuthStateChange listener will pick this up.
-        // The navigate will happen once AuthContext confirms user is signed in.
-        navigate('/home');
+        // Explicitly call signIn function to update AuthContext state immediately
+        // The user object from the backend response is sufficient for this.
+        signIn(data.user);
+        // Removed navigate('/home') from here. App.jsx will handle redirection
+        // once AuthContext's user state updates.
       } else if (isRegister) {
-        console.log('Auth.jsx: Registration success.');
-        // For registration, we don't automatically log in; user needs to confirm email and then login.
+        console.log('Auth.jsx: Registration success. User needs to login.');
+        // After registration, maybe switch to login form automatically for convenience
+        setIsRegister(false);
+        setEmail(''); // Clear inputs after successful registration
+        setPassword('');
+        setUsername('');
       } else {
-        // This else block would catch a successful HTTP response (200) for login
-        // but without an accessToken in the data. This shouldn't happen with our backend.
         console.warn('Auth.jsx: Login response missing access token or not register flow:', data);
         setError('Login successful, but no session token received. Please try again or contact support.');
       }
 
     } catch (err) {
       console.error('Auth.jsx: Auth error in catch block:', err.message);
-      setError(err.message); // Display error on the UI
+      setError(err.message);
+    } finally {
+      // Clear password and username fields after attempt (success or fail)
+      // but keep email for convenience on login retry or registration completion
+      setPassword('');
+      if (isRegister) setUsername('');
     }
   };
 
