@@ -1,6 +1,6 @@
 // client/src/pages/Auth.jsx
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react'; // Keep useEffect, but its content will change
+// import { useNavigate } from 'react-router-dom'; // No longer needed for direct navigation in this component
 import { useAuth } from '../context/AuthContext';
 import styles from './Auth.module.css';
 
@@ -11,17 +11,18 @@ const Auth = () => {
   const [username, setUsername] = useState('');
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
-  const { user, signIn } = useAuth(); // Destructure signIn function from useAuth
-  const navigate = useNavigate(); // Still need navigate for redirects if already logged in
+  const { user, signIn } = useAuth(); // We still need 'user' for internal component logic like clearing inputs after register
+  // const navigate = useNavigate(); // Removed, as App.jsx will handle navigation
 
-  useEffect(() => {
-    console.log('Auth.jsx: Current user state in Auth component (useEffect):', user ? user.id : 'None');
-    // If user is already set in context (e.g., from previous login persisting across refresh)
-    if (user) {
-      console.log('Auth.jsx: User already logged in, navigating to /home.');
-      navigate('/home');
-    }
-  }, [user, navigate]);
+  // REMOVE THIS useEffect BLOCK ENTIRELY
+  // useEffect(() => {
+  //   console.log('Auth.jsx: Current user state in Auth component (useEffect):', user ? user.id : 'None');
+  //   if (user) {
+  //     console.log('Auth.jsx: User already logged in, navigating to /home.');
+  //     navigate('/home');
+  //   }
+  // }, [user, navigate]);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -60,18 +61,13 @@ const Auth = () => {
       console.log('Auth.jsx: Success message received:', data.message);
 
       if (!isRegister && data.accessToken) {
-        console.log('Auth.jsx: Login successful. Setting localStorage token.');
+        console.log('Auth.jsx: Login successful. Setting localStorage token and calling signIn context function.');
         localStorage.setItem('supabase.auth.token', data.accessToken);
-        // Explicitly call signIn function to update AuthContext state immediately
-        // The user object from the backend response is sufficient for this.
-        signIn(data.user);
-        // Removed navigate('/home') from here. App.jsx will handle redirection
-        // once AuthContext's user state updates.
+        signIn(data.user); // Update AuthContext state, which App.jsx will react to for navigation
       } else if (isRegister) {
         console.log('Auth.jsx: Registration success. User needs to login.');
-        // After registration, maybe switch to login form automatically for convenience
-        setIsRegister(false);
-        setEmail(''); // Clear inputs after successful registration
+        setIsRegister(false); // Switch to login form
+        setEmail(''); // Clear inputs for fresh login
         setPassword('');
         setUsername('');
       } else {
@@ -83,8 +79,6 @@ const Auth = () => {
       console.error('Auth.jsx: Auth error in catch block:', err.message);
       setError(err.message);
     } finally {
-      // Clear password and username fields after attempt (success or fail)
-      // but keep email for convenience on login retry or registration completion
       setPassword('');
       if (isRegister) setUsername('');
     }

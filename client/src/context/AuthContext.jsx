@@ -1,6 +1,6 @@
 // client/src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'; // <-- FIX IS HERE
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -23,20 +23,21 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    console.log('AuthContext: useEffect triggered. Starting session check...');
-    let authListenerSubscription = null; // To hold the subscription object
+    console.log('AuthContext: useEffect triggered. (Runs only once on mount).');
+    // We explicitly call getInitialSession only once
+    // And set up the auth state change listener once.
 
     const getInitialSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('AuthContext: getSession Error:', error.message);
-          setUser(null); // Ensure user is null on error
+          setUser(null);
         } else if (session) {
           setUser(session.user);
           console.log('AuthContext: Initial session found. User:', session.user.id);
         } else {
-          setUser(null); // No session found
+          setUser(null);
           console.log('AuthContext: No initial session found.');
         }
       } catch (err) {
@@ -51,39 +52,26 @@ export const AuthProvider = ({ children }) => {
     getInitialSession();
 
     // Setup listener for auth state changes
-    supabase.auth.onAuthStateChange(
+    const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('AuthContext: onAuthStateChange event:', event, 'Session:', session ? session.user?.id : 'None');
         if (event === 'SIGNED_IN') {
           setUser(session.user);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
-        } else if (event === 'INITIAL_SESSION' && session) {
-          // This event is often fired immediately after getSession, can be redundant with above
-          setUser(session.user);
-        } else if (event === 'TOKEN_REFRESHED' && session) {
-          setUser(session.user);
         }
-        // Ensure loading is false after any auth change event
-        setLoading(false);
-        console.log('AuthContext: State updated by onAuthStateChange. User:', user ? user.id : 'None', 'Loading:', false);
+        setLoading(false); // Ensure loading is false after any auth change event
+        console.log('AuthContext: State updated by onAuthStateChange. Current user:', session ? session.user?.id : 'None');
       }
     );
 
-    // No need to explicitly return authListener.subscription.unsubscribe() here
-    // unless you want to cleanup a specific subscription object which is not directly returned by onAuthStateChange
-    // The listener persists for the lifecycle of the client
-
-    // Return a cleanup function for the useEffect
+    // Return cleanup function to unsubscribe the listener when component unmounts
     return () => {
-      // If you had a specific subscription reference, you'd unsubscribe here.
-      // For onAuthStateChange, the listener is typically managed by Supabase client
-      // for the lifetime of the client, but if we get a direct subscription object
-      // (as in old versions or specific setups), we would unsubscribe.
-      // For now, no explicit cleanup needed here unless issues arise.
+      authListener.subscription.unsubscribe();
+      console.log('AuthContext: Auth listener unsubscribed (cleanup).');
     };
 
-  }, [user]); // Keep user in dependency array for its own log in render function. Remove if it causes re-renders.
+  }, []); // <-- EMPTY DEPENDENCY ARRAY: This makes useEffect run ONLY ONCE on mount
 
   const value = {
     user,
