@@ -1,11 +1,11 @@
 // client/src/pages/Home.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // Import useAuth hook
-import styles from './Home.module.css'; // Import CSS Module
+import { useAuth } from '../context/AuthContext';
+import styles from './Home.module.css';
 
 const Home = () => {
-  const { user, loading, supabase } = useAuth(); // Get user, loading, and supabase client from AuthContext
+  const { user, loading, supabase } = useAuth();
   const [profile, setProfile] = useState(null);
   const [fetchError, setFetchError] = useState(null);
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ const Home = () => {
           .from('profiles')
           .select('username, avatar_url, status')
           .eq('id', user.id)
-          .single(); // Use .single() to get a single row
+          .single();
 
         if (error) {
           console.error('Error fetching profile:', error.message);
@@ -35,32 +35,26 @@ const Home = () => {
     };
 
     fetchProfile();
-  }, [user, loading, navigate, supabase]); // Add supabase to dependencies
+  }, [user, loading, navigate, supabase]);
 
   const handleLogout = async () => {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
+    setFetchError(null); // Clear any previous error messages
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // No need to send token for Supabase's client-side logout
-          // as it clears it internally. Our backend /logout also clears it.
-        },
-      });
+      // Directly call Supabase client-side signOut
+      const { error } = await supabase.auth.signOut();
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Logout failed');
+      if (error) {
+        console.error('Supabase Logout Error:', error.message);
+        setFetchError(`Logout failed: ${error.message}`);
+      } else {
+        // Supabase's onAuthStateChange listener in AuthContext will now detect
+        // the SIGNED_OUT event, set user to null, and trigger navigation.
+        console.log('Logged out successfully via Supabase client.');
+        // No need to manually removeItem from localStorage as supabase.auth.signOut() does this
+        // No need to navigate here either, as AuthContext handles it via onAuthStateChange
       }
-
-      // Supabase's onAuthStateChange listener in AuthContext will handle setting user to null
-      // and redirecting to /auth automatically after signOut from the backend.
-      localStorage.removeItem('supabase.auth.token'); // Clear token explicitly from localStorage
-
     } catch (error) {
-      console.error('Logout error:', error.message);
+      console.error('Logout Catch Error:', error.message);
       setFetchError(`Logout failed: ${error.message}`);
     }
   };
