@@ -1,0 +1,66 @@
+/* client/src/pages/Home.module.css */
+.homeContainer {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+  background-color: #36393F; /* Discord dark background */
+  color: #DCDEE1;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.welcomeHeader {
+  color: #FFFFFF;
+  margin-bottom: 30px;
+  font-size: 2.5em;
+  text-align: center;
+}
+
+.profileInfo {
+  background-color: #2F3136;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  margin-bottom: 30px;
+  width: 100%;
+  max-width: 500px;
+  text-align: left;
+}
+
+.profileInfo p {
+  margin-bottom: 10px;
+  font-size: 1.1em;
+}
+
+.avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-top: 20px;
+  border: 3px solid #5865F2;
+}
+
+.logoutButton {
+  background-color: #ED4245; /* Discord red for danger/logout */
+  padding: 12px 25px;
+  font-size: 1.1em;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.logoutButton:hover {
+  background-color: #C33538;
+}
+
+.errorMessage {
+  color: #ED4245;
+  margin-top: 15px;
+  font-size: 0.9em;
+}
