@@ -1,0 +1,91 @@
+/* client/src/pages/Auth.module.css */
+.authContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh; /* Ensure it takes full viewport height */
+  width: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.authBox {
+  background-color: #2F3136; /* Discord dark grey */
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.authBox h1 {
+  color: #FFFFFF;
+  margin-bottom: 30px;
+  font-size: 2em;
+}
+
+.authForm {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.authForm input {
+  padding: 12px 15px;
+  border-radius: 4px;
+  border: 1px solid #202225; /* Darker border */
+  background-color: #36393F; /* Input background */
+  color: #DCDEE1;
+  font-size: 1em;
+}
+
+.authForm input:focus {
+  border-color: #5865F2; /* Discord blue focus */
+  outline: none;
+}
+
+.authForm button {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.1em;
+  font-weight: 600;
+  background-color: #5865F2; /* Discord blue button */
+  color: #FFFFFF;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.authForm button:hover {
+  background-color: #4752C4;
+}
+
+.toggleText {
+  color: #B9BBBE; /* Greyish text */
+  font-size: 0.9em;
+}
+
+.toggleLink {
+  color: #8C9EFF; /* Discord link color */
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.toggleLink:hover {
+  color: #6C7DD6;
+}
+
+.errorMessage {
+  color: #ED4245; /* Discord red */
+  margin-bottom: 15px;
+  font-size: 0.9em;
+}
+
+.successMessage {
+  color: #3BA55D; /* Discord green */
+  margin-bottom: 15px;
+  font-size: 0.9em;
+}
