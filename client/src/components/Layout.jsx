@@ -1,20 +1,19 @@
 // client/src/components/Layout.jsx
 import React from 'react';
-import { Outlet, useNavigate } from 'react-router-dom'; // Outlet for nested routes
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import styles from './Layout.module.css'; // For Layout specific styles
+import UserList from './UserList'; // Import UserList
+import styles from './Layout.module.css';
 
 const Layout = () => {
   const { user, loading, supabase } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if not authenticated (should be handled by App.jsx, but good as a fallback)
   if (!loading && !user) {
     navigate('/auth');
-    return null; // Don't render anything if redirecting
+    return null;
   }
 
-  // Show loading state if auth check is still in progress
   if (loading) {
     return <div className={styles.loadingScreen}>Loading application layout...</div>;
   }
@@ -24,10 +23,8 @@ const Layout = () => {
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Logout Error:', error.message);
-        // Optionally display an error message to the user
       } else {
         console.log('User logged out successfully.');
-        // AuthContext will handle setting user to null and App.jsx will redirect
       }
     } catch (err) {
       console.error('Caught logout error:', err.message);
@@ -36,7 +33,7 @@ const Layout = () => {
 
   return (
     <div className={styles.appLayout}>
-      {/* Left Sidebar: Placeholder for Users/Channels List */}
+      {/* Left Sidebar: Users/Channels List */}
       <aside className={styles.sidebar}>
         <div className={styles.userSection}>
           <img
@@ -48,19 +45,15 @@ const Layout = () => {
           <button onClick={handleLogout} className={styles.logoutButton}>Logout</button>
         </div>
         <nav className={styles.navigation}>
-          {/* We'll add links to DMs and Channels here later */}
-          <ul className={styles.navList}>
-            <li>Direct Messages</li>
-            {/* Direct message users will go here */}
-            <li>Channels</li>
-            {/* Channel list will go here */}
-          </ul>
+          {/* UserList component goes here */}
+          <UserList />
+          {/* We'll add ChannelList here later in Phase 4 */}
         </nav>
       </aside>
 
       {/* Main Content Area: Where chat or other features will render */}
       <main className={styles.mainContent}>
-        <Outlet /> {/* This is where nested routes (like specific chats) will render */}
+        <Outlet />
       </main>
     </div>
   );
