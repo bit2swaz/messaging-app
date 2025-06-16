@@ -1,43 +1,40 @@
 // server/middleware/auth.js
 const { createClient } = require('@supabase/supabase-js');
-const dotenv = require('dotenv');
-
-dotenv.config();
+const jwt = require('jsonwebtoken');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const JWT_SECRET = process.env.JWT_SECRET; // Ensure this is loaded from .env
 
-/**
- * Middleware to verify JWT from Supabase.
- * Attaches the user object to req.user if token is valid.
- */
 const verifyToken = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1]; // Expects "Bearer <token>"
+  const authHeader = req.headers.authorization;
 
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided. Authorization denied.' });
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization token required.' });
   }
 
+  const token = authHeader.split(' ')[1];
+
   try {
-    // Use Supabase's auth.getUser to verify the JWT
-    // This implicitly checks the JWT's validity and expiration
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const decoded = jwt.verify(token, JWT_SECRET); // Verify your custom JWT
+    req.user = decoded.user; // Set req.user from your JWT payload
 
-    if (error) {
-      console.error('JWT verification error:', error.message);
-      return res.status(401).json({ error: 'Token verification failed. Authorization denied.' });
-    }
+    // --- CRITICAL NEW PART: Create a Supabase client for this request with the user's JWT ---
+    // This client will have the correct authentication context for RLS policies
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}` // Pass the user's JWT for RLS context
+        }
+      }
+    });
+    req.supabase = userSupabase; // Attach the user-scoped supabase client to the request object
+    // --- END CRITICAL NEW PART ---
 
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid token or user not found. Authorization denied.' });
-    }
-
-    req.user = user; // Attach user information to the request object
     next(); // Proceed to the next middleware/route handler
   } catch (error) {
-    console.error('Verify Token Catch Error:', error.message);
-    res.status(500).json({ error: 'Internal server error during token verification.' });
+    console.error('Token verification error:', error.message);
+    return res.status(401).json({ error: 'Invalid or expired token.' });
   }
 };
 
