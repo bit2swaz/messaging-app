@@ -140,3 +140,8 @@
 .chatWindowError {
   color: #ED4245;
 }
+
+.optimisticMessage {
+  opacity: 0.7; /* Make it slightly transparent */
+  /* You could also add a pulse animation or a checkmark to indicate "sending" */
+}
