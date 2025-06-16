@@ -2,7 +2,8 @@
 import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import UserList from './UserList'; // Import UserList
+import UserList from './UserList';
+import ChannelList from './ChannelList'; // Import the new ChannelList component
 import styles from './Layout.module.css';
 
 const Layout = () => {
@@ -20,14 +21,11 @@ const Layout = () => {
 
   const handleLogout = async () => {
     try {
-      // Use the custom signOut function from AuthContext instead of direct supabase call
-      // This ensures proper cleanup of realtime connections
       const { error } = await signOut();
       if (error) {
         console.error('Layout: Logout error:', error.message);
       } else {
         console.log('Layout: Logged out successfully with proper cleanup');
-        // No need to navigate here, AuthContext will handle it
       }
     } catch (error) {
       console.error('Layout: Logout error:', error.message);
@@ -48,9 +46,10 @@ const Layout = () => {
           <button onClick={handleLogout} className={styles.logoutButton}>Logout</button>
         </div>
         <nav className={styles.navigation}>
-          {/* UserList component goes here */}
+          {/* UserList component for DMs */}
           <UserList />
-          {/* We'll add ChannelList here later in Phase 4 */}
+          {/* NEW: ChannelList component for group channels */}
+          <ChannelList />
         </nav>
       </aside>
 
