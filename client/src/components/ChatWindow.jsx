@@ -51,7 +51,7 @@ const ChatWindow = () => {
       return;
     }
 
-    setError(null); // Clear previous errors
+    setError(null);
     console.log(`ChatWindow: Setting up message fetch and listener for chat with ${recipientId}`);
 
     const fetchMessages = async () => {
@@ -60,7 +60,8 @@ const ChatWindow = () => {
         const { data, error } = await supabase
           .from('messages')
           .select('*')
-          .or(`(sender_id.eq.${currentUser.id},receiver_id.eq.${recipientId}),(sender_id.eq.${recipientId},receiver_id.eq.${currentUser.id})`)
+          // FIX IS HERE: Removed redundant outer parentheses from each inner condition
+          .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${recipientId},sender_id.eq.${recipientId},receiver_id.eq.${currentUser.id}`)
           .order('created_at', { ascending: true });
 
         if (error) {
@@ -79,10 +80,7 @@ const ChatWindow = () => {
 
     fetchMessages();
 
-    // --- Supabase Realtime Listener for new messages ---
-    // Listen to inserts in the messages table that involve these two users
-    // Ensure the channel name is consistent and unique for this DM
-    const channelName = `dm_${[currentUser.id, recipientId].sort().join('_')}`; // Sort IDs for consistent channel name
+    const channelName = `dm_${[currentUser.id, recipientId].sort().join('_')}`;
     console.log(`ChatWindow: Subscribing to Realtime channel: ${channelName}`);
 
     const channel = supabase
@@ -111,14 +109,12 @@ const ChatWindow = () => {
       });
 
 
-    // Clean up subscription on component unmount or recipientId change
     return () => {
       console.log('ChatWindow: Unsubscribing from message channel and removing.');
-      supabase.removeChannel(channel); // Pass the channel instance directly
+      supabase.removeChannel(channel);
     };
   }, [supabase, currentUser, recipientId]);
 
-  // Effect for auto-scrolling to the bottom of messages
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -144,7 +140,7 @@ const ChatWindow = () => {
       const { data, error } = await supabase
         .from('messages')
         .insert([messageToInsert])
-        .select(); // Add .select() to return the inserted data
+        .select();
 
       if (error) {
         console.error('ChatWindow: Error inserting message to Supabase:', error.message);
