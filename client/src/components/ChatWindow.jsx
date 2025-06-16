@@ -5,20 +5,23 @@ import { useAuth } from '../context/AuthContext';
 import styles from './ChatWindow.module.css';
 
 const ChatWindow = () => {
-  const { userId: recipientId } = useParams(); // Get recipient's user ID from URL
-  const { user: currentUser, supabase } = useAuth(); // Current logged-in user and supabase client
+  const { userId: recipientId } = useParams();
+  const { user: currentUser, supabase } = useAuth();
 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [recipient, setRecipient] = useState(null); // To store recipient's profile details
+  const [recipient, setRecipient] = useState(null);
   const [error, setError] = useState(null);
-  const messagesEndRef = useRef(null); // Ref for auto-scrolling to bottom
+  const messagesEndRef = useRef(null);
 
   // Effect to fetch recipient profile
   useEffect(() => {
     const fetchRecipientProfile = async () => {
-      if (!supabase || !recipientId) return;
-
+      if (!supabase || !recipientId) {
+        console.log('ChatWindow: Skipping fetchRecipientProfile - Supabase or recipientId not ready.');
+        return;
+      }
+      console.log(`ChatWindow: Fetching recipient profile for ID: ${recipientId}`);
       try {
         const { data, error } = await supabase
           .from('profiles')
@@ -26,11 +29,15 @@ const ChatWindow = () => {
           .eq('id', recipientId)
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('ChatWindow: Error fetching recipient profile:', error.message);
+          throw error;
+        }
         setRecipient(data);
+        console.log('ChatWindow: Recipient profile fetched:', data.username);
       } catch (err) {
-        console.error('Error fetching recipient profile:', err.message);
-        setError('Failed to load recipient profile.');
+        console.error('ChatWindow: Caught error in fetchRecipientProfile:', err.message);
+        setError(`Failed to load recipient profile: ${err.message}`);
         setRecipient(null);
       }
     };
@@ -39,25 +46,33 @@ const ChatWindow = () => {
 
   // Effect to fetch messages and set up Realtime listener
   useEffect(() => {
-    if (!supabase || !currentUser || !recipientId) return;
+    if (!supabase || !currentUser || !recipientId) {
+      console.log('ChatWindow: Skipping message fetch/listener setup - Supabase, currentUser, or recipientId not ready.');
+      return;
+    }
 
     setError(null); // Clear previous errors
+    console.log(`ChatWindow: Setting up message fetch and listener for chat with ${recipientId}`);
 
     const fetchMessages = async () => {
+      console.log('ChatWindow: Attempting to fetch initial messages.');
       try {
-        // Fetch direct messages between current user and recipient
         const { data, error } = await supabase
           .from('messages')
           .select('*')
           .or(`(sender_id.eq.${currentUser.id},receiver_id.eq.${recipientId}),(sender_id.eq.${recipientId},receiver_id.eq.${currentUser.id})`)
-          .order('created_at', { ascending: true }); // Order by timestamp
+          .order('created_at', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+          console.error('ChatWindow: Error fetching initial messages from Supabase:', error.message);
+          throw error;
+        }
+
         setMessages(data);
-        console.log(`ChatWindow: Fetched ${data.length} messages for chat with ${recipientId}`);
+        console.log(`ChatWindow: Fetched ${data.length} messages.`);
       } catch (err) {
-        console.error('ChatWindow: Error fetching messages:', err.message);
-        setError('Failed to load messages.');
+        console.error('ChatWindow: Caught error during initial message fetch:', err.message);
+        setError(`Failed to load messages: ${err.message}`);
         setMessages([]);
       }
     };
@@ -66,66 +81,81 @@ const ChatWindow = () => {
 
     // --- Supabase Realtime Listener for new messages ---
     // Listen to inserts in the messages table that involve these two users
-    const subscription = supabase
-      .channel(`chat_${currentUser.id}_${recipientId}`) // Unique channel name for this DM
+    // Ensure the channel name is consistent and unique for this DM
+    const channelName = `dm_${[currentUser.id, recipientId].sort().join('_')}`; // Sort IDs for consistent channel name
+    console.log(`ChatWindow: Subscribing to Realtime channel: ${channelName}`);
+
+    const channel = supabase
+      .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const newMessagePayload = payload.new;
-        console.log('ChatWindow: New message received via Realtime:', newMessagePayload);
+        console.log('ChatWindow: Realtime payload received:', newMessagePayload);
 
-        // Check if the new message is relevant to this specific chat
         const isRelevant =
           (newMessagePayload.sender_id === currentUser.id && newMessagePayload.receiver_id === recipientId) ||
           (newMessagePayload.sender_id === recipientId && newMessagePayload.receiver_id === currentUser.id);
 
         if (isRelevant) {
           setMessages((prevMessages) => [...prevMessages, newMessagePayload]);
+          console.log('ChatWindow: Added new message from Realtime to state.');
+        } else {
+          console.log('ChatWindow: Realtime message not relevant to current chat.');
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`ChatWindow: Successfully SUBSCRIBED to Realtime channel: ${channelName}`);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`ChatWindow: Error subscribing to channel ${channelName}.`);
+        }
+      });
+
 
     // Clean up subscription on component unmount or recipientId change
     return () => {
-      console.log('ChatWindow: Unsubscribing from message channel.');
-      supabase.removeChannel(subscription);
+      console.log('ChatWindow: Unsubscribing from message channel and removing.');
+      supabase.removeChannel(channel); // Pass the channel instance directly
     };
-  }, [supabase, currentUser, recipientId]); // Re-run if any of these change
+  }, [supabase, currentUser, recipientId]);
 
   // Effect for auto-scrolling to the bottom of messages
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]); // Scroll whenever messages array updates
+  }, [messages]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !currentUser || !recipientId) return;
+    if (!newMessage.trim() || !currentUser || !recipientId) {
+      setError('Message cannot be empty or user/recipient not defined.');
+      return;
+    }
 
-    setError(null); // Clear previous error
+    setError(null);
 
     try {
       const messageToInsert = {
         sender_id: currentUser.id,
         receiver_id: recipientId,
         content: newMessage.trim(),
-        // created_at is automatically set by DB
       };
-
-      // Insert message into Supabase
+      console.log('ChatWindow: Attempting to send message:', messageToInsert);
       const { data, error } = await supabase
         .from('messages')
-        .insert([messageToInsert]);
+        .insert([messageToInsert])
+        .select(); // Add .select() to return the inserted data
 
-      if (error) throw error;
+      if (error) {
+        console.error('ChatWindow: Error inserting message to Supabase:', error.message);
+        throw error;
+      }
 
-      console.log('ChatWindow: Message sent successfully to DB.');
-      setNewMessage(''); // Clear input field
-
-      // Realtime listener will handle updating 'messages' state.
-      // No need to manually add to state here for this real-time flow.
+      console.log('ChatWindow: Message sent successfully to DB. Inserted data:', data);
+      setNewMessage('');
     } catch (err) {
-      console.error('ChatWindow: Error sending message:', err.message);
-      setError('Failed to send message.');
+      console.error('ChatWindow: Caught error in handleSendMessage:', err.message);
+      setError(`Failed to send message: ${err.message}`);
     }
   };
 
@@ -165,7 +195,7 @@ const ChatWindow = () => {
             </span>
           </div>
         ))}
-        <div ref={messagesEndRef} /> {/* Element to scroll into view */}
+        <div ref={messagesEndRef} />
       </div>
 
       <form onSubmit={handleSendMessage} className={styles.messageInputForm}>
