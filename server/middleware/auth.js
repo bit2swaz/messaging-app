@@ -9,7 +9,7 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 
 console.log('--- AUTH.JS DEBUG START ---');
-console.log('AUTH.JS DEBUG: process.env.SUPABASE_URL:', process.env.SUPABASE_URL);
+console.log('AUTH.JS DEBUG: process.env.SUPABASE_URL:', supabaseUrl);
 console.log('AUTH.JS DEBUG: process.env.SUPABASE_ANON_KEY (first 5 chars):', supabaseAnonKey ? supabaseAnonKey.substring(0, 5) + '...' : 'None');
 console.log('AUTH.JS DEBUG: JWT_SECRET variable (first 5 chars):', JWT_SECRET ? JWT_SECRET.substring(0, 5) + '...' : 'None');
 console.log('AUTH.JS DEBUG: JWT_SECRET length:', JWT_SECRET ? JWT_SECRET.length : 'N/A');
@@ -37,29 +37,31 @@ const verifyToken = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    
-    // --- CRITICAL FIX HERE ---
-    // The user's ID is in 'decoded.sub'
-    // User metadata (like username) is in 'decoded.user_metadata'
+
     req.user = {
-      id: decoded.sub, // The user's UUID from the JWT
-      // Optionally, you can include other user data from the token if needed
-      // username: decoded.user_metadata?.username,
-      // email: decoded.email,
+      id: decoded.sub,
     };
     console.log('VERIFYTOKEN DEBUG: JWT Decoded successfully. req.user set to:', req.user);
-    // --- END CRITICAL FIX ---
 
+    // --- CRITICAL NEW PART: Create basic client and THEN explicitly set session/auth ---
+    // First, create a basic Supabase client (without global headers for auth)
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    // Create a Supabase client for this request with the user's JWT
-    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    });
-    req.supabase = userSupabase;
+    // Then, explicitly set the session/auth token.
+    // This often performs a local storage/cookie sync, but more importantly,
+    // it registers the token with this specific client instance for subsequent API calls.
+    const { data: { user, session }, error: setAuthError } = await userSupabase.auth.setSession({ access_token: token });
+
+    if (setAuthError) {
+      console.error('VERIFYTOKEN DEBUG: Error setting Supabase client session/auth:', setAuthError.message);
+      // If setting auth fails here, it indicates a very deep problem with the token itself or client setup
+      return res.status(401).json({ error: 'Failed to establish user session for Supabase client.' });
+    }
+
+    console.log('VERIFYTOKEN DEBUG: Supabase client session/auth successfully set for user:', user ? user.id : 'None');
+
+    req.supabase = userSupabase; // Attach the user-scoped supabase client to the request object
+    // --- END CRITICAL NEW PART ---
 
     next();
   } catch (error) {
