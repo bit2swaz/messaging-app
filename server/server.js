@@ -3,7 +3,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-const verifyToken = require('./middleware/auth'); // Ensure this is correctly imported
+const verifyToken = require('./middleware/auth');
 
 // Load environment variables from .env file
 dotenv.config();
@@ -115,6 +115,9 @@ app.post('/api/channels', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'Channel name is required.' });
   }
 
+  // >>> ADD THIS DEBUG LOG <<<
+  console.log('Backend: Attempting to create channel for userId:', userId, 'with name:', name);
+
   try {
     // 1. Create the channel
     const { data: channelData, error: channelError } = await supabase
@@ -139,9 +142,6 @@ app.post('/api/channels', verifyToken, async (req, res) => {
 
     if (memberError) {
       console.error('Supabase Channel Member Add Error:', memberError.message);
-      // If adding member fails but channel was created, consider rollback or log severe error
-      // For now, we'll return error but channel might exist without the creator being a member.
-      // In a real app, you might want a transaction.
       return res.status(500).json({ error: `Channel created, but failed to add creator as member: ${memberError.message}` });
     }
 
@@ -160,10 +160,9 @@ app.get('/api/channels', verifyToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // Select channels where the current user is a member
     const { data: channels, error } = await supabase
       .from('channel_members')
-      .select('channel_id, channels(id, name, description)') // Join to channels table
+      .select('channel_id, channels(id, name, description)')
       .eq('user_id', userId);
 
     if (error) {
@@ -171,7 +170,6 @@ app.get('/api/channels', verifyToken, async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    // Map the result to a cleaner array of channel objects
     const userChannels = channels.map(cm => cm.channels);
     res.status(200).json(userChannels);
 
