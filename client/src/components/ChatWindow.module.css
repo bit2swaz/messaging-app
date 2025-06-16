@@ -1,0 +1,142 @@
+/* client/src/components/ChatWindow.module.css */
+.chatWindowContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* Take full height of its parent (mainContent) */
+  width: 100%;
+  background-color: #36393F; /* Discord main content background */
+  border-radius: 8px;
+  overflow: hidden; /* For rounded corners and content not spilling */
+}
+
+.chatHeader {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: #2F3136; /* Darker header */
+  border-bottom: 1px solid #202225;
+  gap: 10px;
+  flex-shrink: 0; /* Don't shrink header */
+}
+
+.chatHeader h2 {
+  margin: 0;
+  color: #FFFFFF;
+  font-size: 1.2em;
+}
+
+.recipientAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #5865F2; /* Discord blue border */
+}
+
+.messagesContainer {
+  flex-grow: 1; /* Take all available space */
+  padding: 20px;
+  overflow-y: auto; /* Enable scrolling for messages */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.noMessages {
+  color: #B9BBBE;
+  text-align: center;
+  margin-top: 50px;
+}
+
+.messageBubble {
+  max-width: 70%;
+  padding: 10px 15px;
+  border-radius: 18px; /* More rounded for bubbles */
+  line-height: 1.4;
+  word-wrap: break-word; /* Ensure long words break */
+  white-space: pre-wrap; /* Preserve whitespace and line breaks */
+}
+
+.sent {
+  background-color: #5865F2; /* Discord blue for sent messages */
+  color: #FFFFFF;
+  align-self: flex-end; /* Align to the right */
+  border-bottom-right-radius: 4px; /* Slightly less rounded at bottom right for sender */
+}
+
+.received {
+  background-color: #424549; /* Darker grey for received messages */
+  color: #DCDEE1;
+  align-self: flex-start; /* Align to the left */
+  border-bottom-left-radius: 4px; /* Slightly less rounded at bottom left for receiver */
+}
+
+.messageContent {
+  margin: 0;
+  font-size: 0.95em;
+}
+
+.messageTimestamp {
+  font-size: 0.75em;
+  color: rgba(255, 255, 255, 0.7); /* Slightly faded timestamp */
+  margin-top: 5px;
+  display: block;
+  text-align: right;
+}
+
+.messageInputForm {
+  display: flex;
+  padding: 15px 20px;
+  background-color: #2F3136;
+  border-top: 1px solid #202225;
+  flex-shrink: 0; /* Don't shrink input form */
+}
+
+.messageInputField {
+  flex-grow: 1; /* Take most space */
+  padding: 10px 15px;
+  border-radius: 22px; /* Pill-shaped input */
+  border: 1px solid #40444B;
+  background-color: #40444B;
+  color: #DCDEE1;
+  font-size: 1em;
+  outline: none;
+  margin-right: 10px; /* Space between input and button */
+}
+
+.messageInputField::placeholder {
+  color: #B9BBBE;
+}
+
+.messageInputField:focus {
+  border-color: #5865F2;
+}
+
+.sendButton {
+  padding: 10px 20px;
+  border-radius: 22px; /* Pill-shaped button */
+  background-color: #5865F2;
+  color: #FFFFFF;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.sendButton:hover {
+  background-color: #4752C4;
+}
+
+.chatWindowLoading, .chatWindowError {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  color: #B9BBBE;
+  font-size: 1.2em;
+}
+
+.chatWindowError {
+  color: #ED4245;
+}
