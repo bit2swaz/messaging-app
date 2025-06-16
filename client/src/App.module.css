@@ -1,20 +1,8 @@
 /* client/src/App.module.css */
-.appContainer {
+.app-container {
   width: 100%;
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  /* Background color set in index.css, just ensure flex properties */
-}
-
-.loadingContainer {
-  font-size: 1.5em;
-  color: #B9BBBE;
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
+  /* The layout component will handle most visual structure now */
+  /* This just ensures the root container provides a base */
 }
