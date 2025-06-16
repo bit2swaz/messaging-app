@@ -5,12 +5,12 @@ import { useAuth } from '../context/AuthContext';
 import styles from './ChatWindow.module.css';
 
 const ChatWindow = () => {
-  const { userId, channelId } = useParams();
+  const { userId, channelId } = useParams(); // Using userId and channelId directly as from route params
   const { user: currentUser, supabase } = useAuth();
 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [chatPartner, setChatPartner] = useState(null);
+  const [chatPartner, setChatPartner] = useState(null); // Renamed from 'recipient' for clarity in DMs/Channels
   const [error, setError] = useState(null);
   const [tempMessageError, setTempMessageError] = useState(null);
   const messagesEndRef = useRef(null);
@@ -76,7 +76,7 @@ const ChatWindow = () => {
             sender_id,
             receiver_id,
             channel_id,
-            profiles!messages_sender_id_fkey(username, avatar_url)
+            profiles!messages_sender_id_fkey(username, avatar_url) // CRITICAL FIX: Explicit FK for sender!
           `)
           .order('created_at', { ascending: true });
 
@@ -86,6 +86,7 @@ const ChatWindow = () => {
           console.log(`ChatWindow: Fetching DM messages for ${currentUser.id} and ${userId}`);
         } else if (isChannel) {
           query = query.eq('channel_id', channelId);
+          query = query.is('receiver_id', null); // Ensure it's a group message
           console.log(`ChatWindow: Fetching channel messages for channel ${channelId}`);
         } else {
           console.warn('ChatWindow: Neither DM nor Channel ID present for message fetch.');
@@ -95,11 +96,9 @@ const ChatWindow = () => {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Map data to consistently assign 'senderProfile' property
+        // Map data to ensure senderProfile is always an object, even if null from DB
         const messagesWithSenderInfo = data.map(msg => ({
             ...msg,
-            // Ensure profiles data is assigned to senderProfile,
-            // or provide a fallback object if profiles is null (e.g. if profile was deleted)
             senderProfile: msg.profiles || { username: 'Unknown', avatar_url: null }
         }));
         setMessages(messagesWithSenderInfo);
@@ -113,6 +112,7 @@ const ChatWindow = () => {
 
     fetchMessages();
 
+    // Determine realtime channel name
     const realtimeChannelName = isDM
       ? `dm_${[currentUser.id, userId].sort().join('_')}`
       : `channel_${channelId}`;
@@ -144,15 +144,13 @@ const ChatWindow = () => {
           const senderProfile = senderProfileData || { username: 'Unknown', avatar_url: null };
 
           setMessages((prevMessages) => {
-            // Check if message already exists (e.g., from optimistic update)
             if (prevMessages.find(msg => msg.id === newMessagePayload.id)) {
                 return prevMessages.map(msg =>
                     msg.id === newMessagePayload.id
-                        ? { ...newMessagePayload, senderProfile, is_optimistic: false } // Update optimistic with full data
+                        ? { ...newMessagePayload, senderProfile, is_optimistic: false }
                         : msg
                 );
             }
-            // Add new message with fetched sender profile
             return [...prevMessages, { ...newMessagePayload, senderProfile }];
           });
           console.log('ChatWindow: New relevant message received via Realtime (with sender profile):', newMessagePayload);
@@ -200,7 +198,7 @@ const ChatWindow = () => {
     const optimisticMessage = {
       id: tempId,
       sender_id: currentUser.id,
-      senderProfile: { // Mock profile for immediate UI update
+      senderProfile: {
         username: currentUser.user_metadata?.username || currentUser.email,
         avatar_url: currentUser.user_metadata?.avatar_url
       },
@@ -208,7 +206,7 @@ const ChatWindow = () => {
       created_at: new Date().toISOString(),
       is_optimistic: true,
       ...(isDM && { receiver_id: userId }),
-      ...(isChannel && { channel_id: channelId }),
+      ...(isChannel && { channel_id: channelId, receiver_id: null }), // Ensure receiver_id is null for channel
     };
 
     setMessages((prevMessages) => [...prevMessages, optimisticMessage]);
@@ -219,7 +217,7 @@ const ChatWindow = () => {
         sender_id: currentUser.id,
         content: optimisticMessage.content,
         ...(isDM && { receiver_id: userId }),
-        ...(isChannel && { channel_id: channelId }),
+        ...(isChannel && { channel_id: channelId, receiver_id: null }), // Explicitly set receiver_id to null for channel
       };
 
       const { data, error } = await supabase
