@@ -1,0 +1,81 @@
+/* client/src/components/UserList.module.css */
+.userListContainer {
+  padding: 10px;
+  background-color: #2F3136; /* Same as sidebar */
+  border-radius: 8px;
+  margin-top: 20px;
+  color: #DCDEE1;
+}
+
+.listHeader {
+  color: #B9BBBE;
+  font-size: 0.9em;
+  text-transform: uppercase;
+  margin-top: 15px;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+.userList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.userListItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  background-color: #2F3136; /* Background slightly different from overall sidebar to distinguish items */
+  transition: background-color 0.2s ease-in-out;
+  cursor: pointer;
+  text-align: left;
+}
+
+.userListItem:hover {
+  background-color: #40444B; /* Darker hover */
+}
+
+.userAvatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0; /* Prevent avatar from shrinking */
+}
+
+.username {
+  font-weight: 500;
+  color: #FFFFFF;
+  flex-grow: 1; /* Take up remaining space */
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.statusIndicatorOnline,
+.statusIndicatorOffline {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid #2F3136; /* Border matches background to simulate "on top" of avatar */
+}
+
+.statusIndicatorOnline {
+  background-color: #3BA55D; /* Discord green for online */
+}
+
+.statusIndicatorOffline {
+  background-color: #72767D; /* Discord grey for offline */
+}
+
+.error {
+  color: #ED4245;
+  padding: 10px;
+  background-color: #40444B;
+  border-radius: 5px;
+}
