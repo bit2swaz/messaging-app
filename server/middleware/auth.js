@@ -4,8 +4,8 @@ const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.SUPABASE_URL; // Used for client creation if ever needed here
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY; // Used for client creation if ever needed here
 const JWT_SECRET = process.env.JWT_SECRET;
 
 console.log('--- AUTH.JS DEBUG START ---');
@@ -39,16 +39,16 @@ const verifyToken = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     req.user = {
-      id: decoded.sub,
+      id: decoded.sub, // User ID from the JWT 'sub' claim
+      // Add other user metadata from JWT if needed by backend (e.g., username)
+      // username: decoded.user_metadata?.username,
+      // email: decoded.email,
     };
     console.log('VERIFYTOKEN DEBUG: JWT Decoded successfully. req.user set to:', req.user);
 
-    // --- CRITICAL CHANGE: Pass the token directly on req for per-call use ---
-    req.userToken = token; // Store the raw token on req.userToken
-    // We still create a basic Supabase client, but its RLS context will be set per-query.
-    req.supabase = createClient(supabaseUrl, supabaseAnonKey);
-    console.log('VERIFYTOKEN DEBUG: Basic Supabase client created and raw token stored on req.userToken.');
-    // --- END CRITICAL CHANGE ---
+    req.userToken = token; // Store the raw token for potential use if we ever go back to per-call RLS or need it for other services.
+    // We will use the serviceSupabase client in server.js directly for RLS-protected calls.
+    // So, req.supabase is not set here for RLS context.
 
     next();
   } catch (error) {
