@@ -1,5 +1,5 @@
 // client/src/components/UserList.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Add useCallback
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import styles from './UserList.module.css';
@@ -10,10 +10,9 @@ const UserList = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  // Ref to hold the active presence channel instance for cleanup
-  const activePresenceChannelRef = useRef(null);
-
   // Effect to fetch all user profiles initially
+  // This effect needs to run when currentUser changes to update the list,
+  // but it's separate from presence.
   useEffect(() => {
     const fetchAllProfiles = async () => {
       if (!supabase || !currentUser) {
@@ -38,31 +37,41 @@ const UserList = () => {
     };
 
     fetchAllProfiles();
-  }, [supabase, currentUser]);
+  }, [supabase, currentUser]); // Re-run when Supabase client or currentUser object changes
+
+  // Use a ref to store the channel instance, but manage subscription/unsubscription
+  // purely based on currentUser.id (a primitive, less prone to reference changes)
+  // and the lifetime of the component.
+  const channelInstanceRef = useRef(null);
+
+  // Memoize cleanup function to prevent it changing on every render
+  const cleanupPresence = useCallback(() => {
+    if (channelInstanceRef.current) {
+      console.log('UserList: Performing explicit cleanup of presence channel.');
+      try {
+        channelInstanceRef.current.untrack();
+        channelInstanceRef.current.unsubscribe();
+        supabase.removeChannel(channelInstanceRef.current);
+      } catch (err) {
+        console.error('UserList: Error during explicit presence cleanup:', err.message);
+      } finally {
+        channelInstanceRef.current = null;
+      }
+    }
+  }, [supabase]); // Depends on supabase to get the correct client instance
 
   // Effect for Supabase Realtime Presence Setup and Cleanup
   useEffect(() => {
-    // 1. Clean up any previous channel first if this effect re-runs
-    if (activePresenceChannelRef.current) {
-      console.log('UserList: useEffect cleanup from previous run. Untracking & unsubscribing old channel.');
-      try {
-        activePresenceChannelRef.current.untrack();
-        activePresenceChannelRef.current.unsubscribe();
-        supabase.removeChannel(activePresenceChannelRef.current);
-      } catch (err) {
-        console.error('UserList: Error during old channel cleanup:', err.message);
-      } finally {
-        activePresenceChannelRef.current = null;
-      }
-    }
+    // If we have an existing channel, clean it up before proceeding to potentially subscribe to a new one
+    // This handles component re-renders where dependencies might be considered 'changed' by React
+    cleanupPresence(); // Call memoized cleanup
 
-    // 2. If no current user, we are done with presence for now.
-    if (!supabase || !currentUser) {
-      console.log('UserList: No current user or supabase client. Skipping new presence subscription.');
+    // Only proceed if supabase client and current user ID are available
+    if (!supabase || !currentUser?.id) { // Use currentUser.id for stable check
+      console.log('UserList: No current user ID or supabase client. Skipping new presence subscription.');
       return;
     }
 
-    // 3. Setup new channel
     console.log('UserList: Setting up NEW presence channel for user:', currentUser.id);
     const channel = supabase.channel('online_users', {
       config: {
@@ -72,7 +81,7 @@ const UserList = () => {
       },
     });
 
-    activePresenceChannelRef.current = channel; // Store this new channel instance
+    channelInstanceRef.current = channel; // Store the new channel instance
 
     channel
       .on('presence', { event: 'sync' }, () => {
@@ -125,32 +134,24 @@ const UserList = () => {
         }
       });
 
-    // Final cleanup function for THIS specific useEffect run
+    // The cleanup function for THIS specific useEffect run.
+    // This will always run when the component unmounts or if currentUser.id changes.
     return () => {
-      console.log('UserList: useEffect RETURN cleanup for user:', currentUser?.id);
-      if (channel) { // Just check if channel object exists
-        console.log('UserList: Untracking and unsubscribing presence channel on useEffect cleanup.');
-        try {
-          channel.untrack();
-          channel.unsubscribe();
-          supabase.removeChannel(channel);
-        } catch (err) {
-          console.error('UserList: Error during untrack/unsubscribe in useEffect cleanup:', err.message);
-        }
-      }
+      console.log('UserList: useEffect RETURN cleanup triggered for current effect.');
+      // The memoized cleanup will handle the actual untrack/unsubscribe
+      cleanupPresence();
     };
-  }, [supabase, currentUser]); // Dependencies: Re-subscribe if supabase or current user changes
+  }, [supabase, currentUser?.id, cleanupPresence]); // Dependencies: supabase, and the stable ID of currentUser, and the memoized cleanup func
 
   // --- Separate useEffect for global window.beforeunload event ---
   useEffect(() => {
     const handleGlobalBeforeUnload = () => {
       const channelToUntrack = supabase.getChannel('online_users');
 
-      // FIX IS HERE: More robust check for channel and its subscription object
-      if (channelToUntrack && channelToUntrack.subscription) {
-        console.log('UserList: Global beforeunload event - Untracking and unsubscribing from presence.');
+      // More robust check for channel existence and attempt cleanup
+      if (channelToUntrack) {
+        console.log('UserList: Global beforeunload event - Attempting untrack/unsubscribe.');
         try {
-          // untrack() and unsubscribe() are generally safe to call even if not fully SUBSCRIBED
           channelToUntrack.untrack();
           channelToUntrack.unsubscribe();
           supabase.removeChannel(channelToUntrack);
@@ -158,7 +159,7 @@ const UserList = () => {
           console.error('UserList: Error during untrack/unsubscribe on global beforeunload:', err.message);
         }
       } else {
-        console.log('UserList: Global beforeunload - No active channel or subscription found to untrack.');
+        console.log('UserList: Global beforeunload - No active channel to untrack.');
       }
     };
 
