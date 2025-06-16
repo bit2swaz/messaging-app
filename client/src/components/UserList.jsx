@@ -10,15 +10,12 @@ const UserList = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  // Ref to hold the active presence channel instance for cleanup
-  const activeChannelRef = useRef(null); // Renamed for clarity
-
   // Effect to fetch all user profiles initially
   useEffect(() => {
     const fetchAllProfiles = async () => {
       if (!supabase || !currentUser) {
         console.log('UserList: Fetching profiles skipped - no supabase or current user.');
-        setUsers([]); // Clear users if not logged in
+        setUsers([]);
         return;
       }
       try {
@@ -43,39 +40,23 @@ const UserList = () => {
     fetchAllProfiles();
   }, [supabase, currentUser]);
 
-  // Effect for Supabase Realtime Presence Setup
+  // Effect for Supabase Realtime Presence Setup - Simplified to bare essentials
   useEffect(() => {
-    // If no authenticated user, clean up any existing channel and return
+    // If no authenticated user, or no supabase client, return.
+    // The cleanup will happen when currentUser becomes null or component unmounts.
     if (!supabase || !currentUser?.id) {
-      console.log('UserList: No current user ID or supabase client. Cleaning up any existing channel and returning.');
-      // When currentUser logs out, this path is hit. Ensure we untrack/unsubscribe the previous channel.
-      if (activeChannelRef.current) {
-        try {
-          activeChannelRef.current.untrack();
-          activeChannelRef.current.unsubscribe();
-          supabase.removeChannel(activeChannelRef.current);
-          console.log('UserList: Cleaned up active channel due to no current user.');
-        } catch (err) {
-          console.error('UserList: Error cleaning up active channel on logout:', err.message);
-        } finally {
-          activeChannelRef.current = null; // Clear ref after cleanup attempt
-        }
-      }
+      console.log('UserList: No current user ID or supabase client. Realtime subscription skipped.');
       return;
     }
 
-    // Always create a new channel instance when this effect runs for an active user
-    // This simplifies the logic by avoiding `getChannel` and always subscribing fresh
-    console.log('UserList: Creating NEW presence channel for user:', currentUser.id);
+    console.log('UserList: Attempting to subscribe to Realtime presence channel for user:', currentUser.id);
     const channel = supabase.channel('online_users', {
       config: {
         presence: {
-          key: currentUser.id, // Unique key for the current user in this channel
+          key: currentUser.id,
         },
       },
     });
-
-    activeChannelRef.current = channel; // Store this new channel instance
 
     channel
       .on('presence', { event: 'sync' }, () => {
@@ -147,49 +128,22 @@ const UserList = () => {
     // Cleanup function for this useEffect: runs when dependencies change or component unmounts
     return () => {
       console.log('UserList: useEffect RETURN cleanup function triggered for user:', currentUser?.id);
-      // Ensure we clean up the channel instance created by this specific effect run
       if (channel) {
         console.log('UserList: Untracking and unsubscribing presence channel on useEffect cleanup.');
         try {
-          channel.untrack();
-          channel.unsubscribe();
-          supabase.removeChannel(channel);
+          channel.untrack(); // Signal leave presence
+          channel.unsubscribe(); // Unsubscribe from the channel
+          supabase.removeChannel(channel); // Remove from Supabase client's internal list
           console.log('UserList: Realtime channel fully cleaned up by useEffect return.');
         } catch (err) {
           console.error('UserList: Error during untrack/unsubscribe in useEffect cleanup:', err.message);
         }
       }
-      activeChannelRef.current = null; // Clear ref after cleanup
     };
   }, [supabase, currentUser?.id]); // Dependencies: supabase and stable ID of currentUser
 
-  // --- Separate useEffect for global window.beforeunload event ---
-  useEffect(() => {
-    const handleGlobalBeforeUnload = () => {
-      const channelToUntrack = supabase.getChannel('online_users'); // Still using getChannel for global scope
-
-      if (channelToUntrack) { // Just check if channel object exists
-        console.log('UserList: Global beforeunload event - Attempting untrack/unsubscribe.');
-        try {
-          channelToUntrack.untrack();
-          channelToUntrack.unsubscribe();
-          supabase.removeChannel(channelToUntrack);
-          console.log('UserList: Successfully untracked/unsubscribed on global beforeunload.');
-        } catch (err) {
-          console.error('UserList: Error during untrack/unsubscribe on global beforeunload:', err.message);
-        }
-      } else {
-        console.log('UserList: Global beforeunload - No active channel to untrack.');
-      }
-    };
-
-    window.addEventListener('beforeunload', handleGlobalBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleGlobalBeforeUnload);
-      console.log('UserList: Global beforeunload listener removed.');
-    };
-  }, [supabase]); // Depend only on supabase to attach listener once per supabase client instance
+  // --- Removed global window.beforeunload event listener for now ---
+  // We will ONLY re-add this if the basic logout works reliably.
 
   const handleUserClick = (userId) => {
     navigate(`/home/chat/${userId}`);
