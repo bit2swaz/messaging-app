@@ -11,7 +11,8 @@ const ChatWindow = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [recipient, setRecipient] = useState(null);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null); // Persistent error state for general issues
+  const [tempMessageError, setTempMessageError] = useState(null); // New: for temporary message input errors
   const messagesEndRef = useRef(null);
 
   // Effect to fetch recipient profile
@@ -24,6 +25,7 @@ const ChatWindow = () => {
           .select('id, username, avatar_url')
           .eq('id', recipientId)
           .single();
+
         if (error) throw error;
         setRecipient(data);
       } catch (err) {
@@ -39,7 +41,7 @@ const ChatWindow = () => {
   useEffect(() => {
     if (!supabase || !currentUser || !recipientId) return;
 
-    setError(null);
+    setError(null); // Clear general error on chat window load
 
     const fetchMessages = async () => {
       try {
@@ -69,13 +71,11 @@ const ChatWindow = () => {
           (newMessagePayload.sender_id === recipientId && newMessagePayload.receiver_id === currentUser.id);
 
         if (isRelevant) {
-          // Check if the message is already in state (from optimistic update)
-          // This prevents duplicates if optimistic update added it and then Realtime sends it back
           setMessages((prevMessages) => {
             if (!prevMessages.find(msg => msg.id === newMessagePayload.id)) {
               return [...prevMessages, newMessagePayload];
             }
-            return prevMessages; // Message already exists, no duplicate
+            return prevMessages;
           });
         }
       })
@@ -84,6 +84,8 @@ const ChatWindow = () => {
           console.log(`ChatWindow: Successfully SUBSCRIBED to Realtime channel: ${channelName}`);
         } else if (status === 'CHANNEL_ERROR') {
           console.error(`ChatWindow: Error subscribing to channel ${channelName}.`);
+        } else {
+          console.log(`ChatWindow: Realtime channel subscription status: ${status}`);
         }
       });
 
@@ -101,46 +103,48 @@ const ChatWindow = () => {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !currentUser || !recipientId) {
-      setError('Message cannot be empty or user/recipient not defined.');
+    setTempMessageError(null); // Clear previous temporary error
+
+    if (!newMessage.trim()) { // Only check for empty message content
+      setTempMessageError('Message cannot be empty.'); // Set temporary error
+      return;
+    }
+    if (!currentUser || !recipientId) { // Check for user/recipient definition as before
+      setTempMessageError('User or recipient not defined. Please refresh.');
       return;
     }
 
-    setError(null);
+    // setError(null); // General errors are cleared by useEffect above.
 
-    // Optimistic UI: Create a temporary message ID and add the message to the state immediately
     const tempId = `temp-${Date.now()}-${Math.random()}`;
     const optimisticMessage = {
-      id: tempId, // Temporary ID
+      id: tempId,
       sender_id: currentUser.id,
       receiver_id: recipientId,
       content: newMessage.trim(),
-      created_at: new Date().toISOString(), // Use client-side timestamp for immediate display
-      is_optimistic: true, // Flag to identify optimistic message
+      created_at: new Date().toISOString(),
+      is_optimistic: true,
     };
 
     setMessages((prevMessages) => [...prevMessages, optimisticMessage]);
-    setNewMessage(''); // Clear input field immediately
+    setNewMessage('');
 
     try {
       const messageToInsert = {
         sender_id: currentUser.id,
         receiver_id: recipientId,
-        content: optimisticMessage.content, // Use content from optimistic message
+        content: optimisticMessage.content,
       };
 
       const { data, error } = await supabase
         .from('messages')
         .insert([messageToInsert])
-        .select(); // Get the actual message from DB with its real ID
+        .select();
 
       if (error) {
         throw error;
       }
 
-      // Replace optimistic message with the actual message from the database
-      // The Realtime listener will also receive this, but this handles potential race conditions
-      // and ensures the actual message ID and server-generated created_at are used.
       setMessages((prevMessages) =>
         prevMessages.map((msg) =>
           msg.id === tempId ? { ...data[0], is_optimistic: false } : msg
@@ -149,13 +153,14 @@ const ChatWindow = () => {
 
     } catch (err) {
       console.error('ChatWindow: Caught error in handleSendMessage:', err.message);
-      setError(`Failed to send message: ${err.message}`);
-      // If send fails, remove the optimistic message
+      // Display this error more prominently if it affects sending.
+      setError(`Failed to send message: ${err.message}`); // Set general error for persistent issues
       setMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempId));
     }
   };
 
-  if (error) {
+  // If a general error exists, display it prominently.
+  if (error && !tempMessageError) { // Only show general error if no temporary one is active
     return <div className={styles.chatWindowError}>{error}</div>;
   }
 
@@ -174,7 +179,7 @@ const ChatWindow = () => {
         <h2>{recipient.username}</h2>
       </div>
 
-      <div className={styles.messagesContainer}>
+      <div className={styles.messagesContainer}> {/* This container will now have overflow:auto */}
         {messages.length === 0 && (
           <p className={styles.noMessages}>Start a conversation with {recipient.username}!</p>
         )}
@@ -183,7 +188,7 @@ const ChatWindow = () => {
             key={msg.id}
             className={`${styles.messageBubble} ${
               msg.sender_id === currentUser.id ? styles.sent : styles.received
-            } ${msg.is_optimistic ? styles.optimisticMessage : ''}`} /* Apply optimistic style */
+            } ${msg.is_optimistic ? styles.optimisticMessage : ''}`}
           >
             <p className={styles.messageContent}>{msg.content}</p>
             <span className={styles.messageTimestamp}>
@@ -195,11 +200,15 @@ const ChatWindow = () => {
       </div>
 
       <form onSubmit={handleSendMessage} className={styles.messageInputForm}>
+        {tempMessageError && <p className={styles.tempErrorMessage}>{tempMessageError}</p>} {/* Display temporary error here */}
         <input
           type="text"
           placeholder={`Message @${recipient.username}...`}
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => {
+            setNewMessage(e.target.value);
+            if (tempMessageError) setTempMessageError(null); // Clear error when user starts typing
+          }}
           className={styles.messageInputField}
         />
         <button type="submit" className={styles.sendButton}>Send</button>

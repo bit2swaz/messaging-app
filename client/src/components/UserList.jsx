@@ -10,9 +10,6 @@ const UserList = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  // Ref to hold the active presence channel instance for cleanup
-  const activeChannelRef = useRef(null); // Renamed for clarity
-
   // Effect to fetch all user profiles initially
   useEffect(() => {
     const fetchAllProfiles = async () => {
@@ -25,13 +22,15 @@ const UserList = () => {
         console.log('UserList: Fetching all profiles...');
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, username, avatar_url, status')
+          // Temporarily removing 'status' from select, as Realtime presence is disabled
+          .select('id, username, avatar_url')
           .neq('id', currentUser.id);
 
         if (error) {
           throw error;
         }
-        setUsers(data || []);
+        // For now, all users are treated as 'Offline' since Realtime presence is disabled
+        setUsers(data ? data.map(u => ({ ...u, status: 'Offline' })) : []);
         console.log('UserList: Fetched profiles successfully:', data.map(u => u.username));
       } catch (err) {
         console.error('UserList: Error fetching all profiles:', err.message);
@@ -43,15 +42,16 @@ const UserList = () => {
     fetchAllProfiles();
   }, [supabase, currentUser]);
 
-  // Effect for Supabase Realtime Presence Setup
-  // This useEffect will now manage the channel's life cycle directly
+  // TEMPORARILY COMMENTING OUT THE ENTIRE REALTIME PRESENCE EFFECT
+  // We will re-enable and fix this once the core UI/UX is stable.
+  /*
   useEffect(() => {
     // If no authenticated user, clean up any existing channel and return
     if (!supabase || !currentUser?.id) {
       console.log('UserList: No current user ID or supabase client. Cleaning up any existing channel and returning.');
-      // When currentUser logs out, this path is hit. Ensure we untrack/unsubscribe the previous channel.
-      const existingChannel = supabase.getChannel('online_users'); // Still trying to get channel here
+      const existingChannel = supabase.getChannel('online_users');
       if (existingChannel) {
+        console.log('UserList: Found existing "online_users" channel during cleanup (no current user).');
         try {
           existingChannel.untrack();
           existingChannel.unsubscribe();
@@ -59,78 +59,71 @@ const UserList = () => {
           console.log('UserList: Cleaned up existing channel due to no current user.');
         } catch (err) {
           console.error('UserList: Error cleaning up existing channel:', err.message);
-        } finally {
-          activeChannelRef.current = null; // Clear ref after cleanup attempt
         }
       }
       return;
     }
 
-    // Attempt to get an existing channel instance or create a new one
-    // REMOVED `let channel = supabase.getChannel('online_users');` and its `if(channel)` logic here,
-    // as per the last fix attempt to avoid `getChannel` issues during channel creation/reuse.
-    // However, it seems a `getChannel` call still exists in the "no currentUser" cleanup path above.
-
-    // Create a new channel instance for the current user's session
-    console.log('UserList: Creating NEW presence channel for user:', currentUser.id);
-    const channel = supabase.channel('online_users', { // Reassign channel variable
-      config: {
-        presence: {
-          key: currentUser.id, // Unique key for the current user in this channel
+    let channel = supabase.getChannel('online_users');
+    if (!channel) {
+      console.log('UserList: No existing "online_users" channel found. Creating new one.');
+      channel = supabase.channel('online_users', {
+        config: {
+          presence: {
+            key: currentUser.id,
+          },
         },
-      },
-    });
+      });
 
-    activeChannelRef.current = channel; // Store this new channel instance
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const presenceState = channel.presenceState();
+          const onlineUserIds = Object.keys(presenceState);
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const presenceState = channel.presenceState();
-        const onlineUserIds = Object.keys(presenceState);
+          console.log('UserList: Presence sync event received.');
+          console.log('UserList: Raw presenceState:', JSON.stringify(presenceState, null, 2));
+          console.log('UserList: Extracted onlineUserIds:', onlineUserIds);
 
-        console.log('UserList: Presence sync event received.');
-        console.log('UserList: Raw presenceState:', JSON.stringify(presenceState, null, 2));
-        console.log('UserList: Extracted onlineUserIds:', onlineUserIds);
-
-        setUsers(prevUsers => {
-          return prevUsers.map(u => {
-            const newStatus = onlineUserIds.includes(u.id) ? 'Online' : 'Offline';
-            if (u.status !== newStatus) {
-              console.log(`UserList: User ${u.username} (${u.id}) changed status from ${u.status} to ${newStatus}`);
-            }
-            return {
-              ...u,
-              status: newStatus,
-            };
+          setUsers(prevUsers => {
+            return prevUsers.map(u => {
+              const newStatus = onlineUserIds.includes(u.id) ? 'Online' : 'Offline';
+              if (u.status !== newStatus) {
+                console.log(`UserList: User ${u.username} (${u.id}) changed status from ${u.status} to ${newStatus}`);
+              }
+              return {
+                ...u,
+                status: newStatus,
+              };
+            });
+          });
+          console.log('UserList: Users state updated after sync.');
+        })
+        .on('presence', { event: 'join' }, ({ newPresences }) => {
+          console.log('UserList: User(s) JOINED presence:', newPresences.map(p => p.key));
+          setUsers(prevUsers => {
+            return prevUsers.map(u => {
+              const isJoined = newPresences.some(p => p.key === u.id);
+              return {
+                ...u,
+                status: isJoined ? 'Online' : u.status,
+              };
+            });
+          });
+        })
+        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+          console.log('UserList: User(s) LEFT presence:', leftPresences.map(p => p.key));
+          setUsers(prevUsers => {
+            return prevUsers.map(u => {
+              const isLeft = leftPresences.some(p => p.key === u.id);
+              return {
+                ...u,
+                status: isLeft ? 'Offline' : u.status,
+              };
+            });
           });
         });
-        console.log('UserList: Users state updated after sync.');
-      })
-      .on('presence', { event: 'join' }, ({ newPresences }) => {
-        console.log('UserList: User(s) JOINED presence:', newPresences.map(p => p.key));
-        setUsers(prevUsers => {
-          return prevUsers.map(u => {
-            const isJoined = newPresences.some(p => p.key === u.id);
-            return {
-              ...u,
-              status: isJoined ? 'Online' : u.status,
-            };
-          });
-        });
-      })
-      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        console.log('UserList: User(s) LEFT presence:', leftPresences.map(p => p.key));
-        setUsers(prevUsers => {
-          return prevUsers.map(u => {
-            const isLeft = leftPresences.some(p => p.key === u.id);
-            return {
-              ...u,
-              status: isLeft ? 'Offline' : u.status,
-            };
-          });
-        });
-      })
-      .subscribe(async (status) => {
+
+      channel.subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           console.log('UserList: Realtime channel SUBSCRIBED successfully. Announcing presence...');
           const { error: trackError } = await channel.track({
@@ -150,31 +143,59 @@ const UserList = () => {
         }
       });
 
-    // Cleanup function for this useEffect: runs when dependencies change or component unmounts
+      supabase.realtime.onDisconnected(() => {
+        console.warn('UserList: Supabase Realtime client DISCONNECTED! All users should be considered offline.');
+        setUsers(prevUsers => prevUsers.map(u => ({ ...u, status: 'Offline' })));
+      });
+
+    } else {
+      console.log('UserList: Channel already exists and user is potentially tracked. Re-verifying tracking status.');
+      if (channel.subscription && channel.subscription.state !== 'SUBSCRIBED') {
+          console.log('UserList: Existing channel not SUBSCRIBED, attempting to subscribe/track.');
+          channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+              console.log('UserList: Re-subscribed existing channel successfully.');
+              const { error: trackError } = await channel.track({
+                user_id: currentUser.id,
+                username: currentUser.user_metadata?.username || currentUser.email,
+                status: 'Online',
+              });
+              if (trackError) console.error('UserList: Error re-tracking presence:', trackError.message);
+              else console.log('UserList: Presence re-tracked successfully.');
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('UserList: Re-subscribe existing channel error. Status:', status);
+            }
+          });
+      } else if (channel.subscription && channel.subscription.state === 'SUBSCRIBED') {
+         console.log('UserList: Channel already subscribed. Ensuring presence is still tracked.');
+      }
+    }
+
     return () => {
       console.log('UserList: useEffect RETURN cleanup function triggered for user:', currentUser?.id);
-      // Ensure we clean up the channel instance created by this specific effect run
-      if (channel) {
+      const cleanupChannel = supabase.getChannel('online_users');
+      if (cleanupChannel) {
         console.log('UserList: Untracking and unsubscribing presence channel on useEffect cleanup.');
         try {
-          channel.untrack();
-          channel.unsubscribe();
-          supabase.removeChannel(channel);
+          cleanupChannel.untrack();
+          cleanupChannel.unsubscribe();
+          supabase.removeChannel(cleanupChannel);
           console.log('UserList: Realtime channel fully cleaned up by useEffect return.');
         } catch (err) {
           console.error('UserList: Error during untrack/unsubscribe in useEffect cleanup:', err.message);
         }
       }
-      activeChannelRef.current = null; // Clear ref after cleanup
     };
-  }, [supabase, currentUser?.id]); // Dependencies: supabase and stable ID of currentUser
+  }, [supabase, currentUser?.id]);
+  */
 
-  // --- Separate useEffect for global window.beforeunload event ---
+  // --- TEMPORARILY COMMENTING OUT global window.beforeunload event listener ---
+  /*
   useEffect(() => {
     const handleGlobalBeforeUnload = () => {
-      const channelToUntrack = supabase.getChannel('online_users'); // Still using getChannel for global scope
+      const channelToUntrack = supabase.getChannel('online_users');
 
-      if (channelToUntrack) { // Just check if channel object exists
+      if (channelToUntrack) {
         console.log('UserList: Global beforeunload event - Attempting untrack/unsubscribe.');
         try {
           channelToUntrack.untrack();
@@ -195,7 +216,8 @@ const UserList = () => {
       window.removeEventListener('beforeunload', handleGlobalBeforeUnload);
       console.log('UserList: Global beforeunload listener removed.');
     };
-  }, [supabase]); // Depend only on supabase to attach listener once per supabase client instance
+  }, [supabase]);
+  */
 
   const handleUserClick = (userId) => {
     navigate(`/home/chat/${userId}`);
@@ -207,21 +229,10 @@ const UserList = () => {
 
   return (
     <div className={styles.userListContainer}>
-      <h3 className={styles.listHeader}>Online Users</h3>
+      {/* Displaying users under 'Offline Users' as presence is disabled */}
+      <h3 className={styles.listHeader}>Users</h3>
       <ul className={styles.userList}>
-        {users.filter(u => u.status === 'Online').map(user => (
-          <li key={user.id} className={styles.userListItem} onClick={() => handleUserClick(user.id)}>
-            <img
-              src={user.avatar_url || `https://placehold.co/24x24/3BA55D/FFFFFF?text=${user.username ? user.username[0].toUpperCase() : '?'}`}
-              alt={`${user.username}'s Avatar`}
-              className={styles.userAvatar}
-            />
-            <span className={styles.username}>{user.username}</span>
-            <span className={styles.statusIndicatorOnline}></span>
-          </li>
-        ))}
-        <h3 className={styles.listHeader}>Offline Users</h3>
-        {users.filter(u => u.status === 'Offline').map(user => (
+        {users.map(user => ( // No more filtering by status since it's all 'Offline'
           <li key={user.id} className={styles.userListItem} onClick={() => handleUserClick(user.id)}>
             <img
               src={user.avatar_url || `https://placehold.co/24x24/72767D/FFFFFF?text=${user.username ? user.username[0].toUpperCase() : '?'}`}
@@ -229,7 +240,8 @@ const UserList = () => {
               className={styles.userAvatar}
             />
             <span className={styles.username}>{user.username}</span>
-            <span className={styles.statusIndicatorOffline}></span>
+            {/* Temporarily remove status indicator as presence is disabled */}
+            {/* <span className={user.status === 'Online' ? styles.statusIndicatorOnline : styles.statusIndicatorOffline}></span> */}
           </li>
         ))}
       </ul>

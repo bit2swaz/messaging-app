@@ -1,28 +1,24 @@
 /* client/src/components/ChatWindow.module.css */
+
 .chatWindowContainer {
   display: flex;
   flex-direction: column;
   height: 100%; /* Take full height of its parent (mainContent) */
-  width: 100%;
-  background-color: #36393F; /* Discord main content background */
+  background-color: #36393F; /* Discord dark background */
+  color: #DCDEE1;
   border-radius: 8px;
-  overflow: hidden; /* For rounded corners and content not spilling */
+  overflow: hidden; /* Ensures child overflow doesn't break rounded corners */
 }
 
 .chatHeader {
+  padding: 15px 20px;
+  background-color: #2F3136; /* Slightly lighter header background */
+  border-bottom: 1px solid #202225;
   display: flex;
   align-items: center;
-  padding: 15px 20px;
-  background-color: #2F3136; /* Darker header */
-  border-bottom: 1px solid #202225;
   gap: 10px;
-  flex-shrink: 0; /* Don't shrink header */
-}
-
-.chatHeader h2 {
-  margin: 0;
-  color: #FFFFFF;
-  font-size: 1.2em;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 
 .recipientAvatar {
@@ -30,118 +26,163 @@
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #5865F2; /* Discord blue border */
+  background-color: #5865F2; /* Default background for placeholder */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 1.2em;
+}
+
+.chatHeader h2 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0;
 }
 
 .messagesContainer {
-  flex-grow: 1; /* Take all available space */
-  padding: 20px;
-  overflow-y: auto; /* Enable scrolling for messages */
+  flex-grow: 1; /* Allows messages to take up available space */
+  padding: 10px 20px;
+  overflow-y: auto; /* THIS IS THE KEY FIX for scrolling messages */
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  /* Custom scrollbar for aesthetics */
+  scrollbar-width: thin;
+  scrollbar-color: #202225 #2F3136;
 }
 
+.messagesContainer::-webkit-scrollbar {
+  width: 8px;
+}
+
+.messagesContainer::-webkit-scrollbar-track {
+  background: #2F3136;
+  border-radius: 10px;
+}
+
+.messagesContainer::-webkit-scrollbar-thumb {
+  background-color: #202225;
+  border-radius: 10px;
+  border: 2px solid #2F3136;
+}
+
+
 .noMessages {
-  color: #B9BBBE;
   text-align: center;
-  margin-top: 50px;
+  color: #8E9297;
+  padding: 20px;
+  font-style: italic;
 }
 
 .messageBubble {
+  display: flex;
+  flex-direction: column;
   max-width: 70%;
   padding: 10px 15px;
-  border-radius: 18px; /* More rounded for bubbles */
-  line-height: 1.4;
+  border-radius: 10px;
   word-wrap: break-word; /* Ensure long words break */
   white-space: pre-wrap; /* Preserve whitespace and line breaks */
 }
 
 .sent {
-  background-color: #5865F2; /* Discord blue for sent messages */
-  color: #FFFFFF;
-  align-self: flex-end; /* Align to the right */
-  border-bottom-right-radius: 4px; /* Slightly less rounded at bottom right for sender */
+  align-self: flex-end; /* Align to the right for sent messages */
+  background-color: #5865F2; /* Discord primary blue */
+  color: white;
+  border-bottom-right-radius: 2px; /* Small corner for tail */
 }
 
 .received {
-  background-color: #424549; /* Darker grey for received messages */
+  align-self: flex-start; /* Align to the left for received messages */
+  background-color: #40444B; /* Darker grey for received messages */
   color: #DCDEE1;
-  align-self: flex-start; /* Align to the left */
-  border-bottom-left-radius: 4px; /* Slightly less rounded at bottom left for receiver */
+  border-bottom-left-radius: 2px; /* Small corner for tail */
 }
 
 .messageContent {
   margin: 0;
   font-size: 0.95em;
+  line-height: 1.4;
 }
 
 .messageTimestamp {
   font-size: 0.75em;
-  color: rgba(255, 255, 255, 0.7); /* Slightly faded timestamp */
+  color: rgba(255, 255, 255, 0.7);
+  align-self: flex-end;
   margin-top: 5px;
-  display: block;
-  text-align: right;
+}
+
+.optimisticMessage {
+  opacity: 0.6; /* Slightly faded to indicate pending */
+  filter: grayscale(20%); /* A subtle visual cue */
 }
 
 .messageInputForm {
-  display: flex;
   padding: 15px 20px;
-  background-color: #2F3136;
+  background-color: #40444B; /* Input background */
   border-top: 1px solid #202225;
-  flex-shrink: 0; /* Don't shrink input form */
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  flex-shrink: 0; /* Prevents form from shrinking */
 }
 
 .messageInputField {
-  flex-grow: 1; /* Take most space */
-  padding: 10px 15px;
-  border-radius: 22px; /* Pill-shaped input */
-  border: 1px solid #40444B;
-  background-color: #40444B;
+  flex-grow: 1;
+  padding: 12px 15px;
+  border: none;
+  border-radius: 20px; /* More rounded input */
+  background-color: #4F545C; /* Input field background */
   color: #DCDEE1;
   font-size: 1em;
-  outline: none;
-  margin-right: 10px; /* Space between input and button */
-}
-
-.messageInputField::placeholder {
-  color: #B9BBBE;
-}
-
-.messageInputField:focus {
-  border-color: #5865F2;
-}
-
-.sendButton {
-  padding: 10px 20px;
-  border-radius: 22px; /* Pill-shaped button */
-  background-color: #5865F2;
-  color: #FFFFFF;
-  border: none;
-  font-weight: 600;
-  cursor: pointer;
+  outline: none; /* Remove outline on focus */
   transition: background-color 0.2s ease-in-out;
 }
 
-.sendButton:hover {
-  background-color: #4752C4;
+.messageInputField:focus {
+  background-color: #5C626A; /* Slightly lighter on focus */
 }
 
-.chatWindowLoading, .chatWindowError {
+.sendButton {
+  background-color: #5865F2; /* Discord blue */
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 20px; /* More rounded button */
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: 600;
+  transition: background-color 0.2s ease-in-out, transform 0.1s ease-out;
+}
+
+.sendButton:hover {
+  background-color: #4752C4; /* Darker blue on hover */
+  transform: translateY(-1px);
+}
+
+.sendButton:active {
+  transform: translateY(0);
+}
+
+/* NEW: Style for temporary message input errors */
+.tempErrorMessage {
+  color: #f04747; /* Discord red for errors */
+  font-size: 0.85em;
+  padding: 5px 0;
+  text-align: center;
+  width: 100%; /* Ensure it spans across the input area */
+}
+
+.chatWindowLoading,
+.chatWindowError {
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100%;
-  width: 100%;
-  color: #B9BBBE;
   font-size: 1.2em;
-}
-
-.chatWindowError {
-  color: #ED4245;
-}
-
-.optimisticMessage {
-  opacity: 0.7; /* Make it slightly transparent */
-  /* You could also add a pulse animation or a checkmark to indicate "sending" */
+  color: #8E9297;
+  background-color: #36393F;
+  border-radius: 8px;
 }

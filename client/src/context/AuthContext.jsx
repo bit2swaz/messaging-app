@@ -16,8 +16,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.log('Supabase URL and Anon Key appear to be defined.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-console.log('Supabase client instance created. Realtime services should be available.');
+// Create the Supabase client with realtime options
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
+  },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
+
+console.log('Supabase client instance created with enhanced realtime options.');
 console.log('--- AuthContext.jsx Initialization END ---');
 
 
@@ -31,29 +44,80 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     console.log('AuthContext: Custom signIn called. User state set:', userData ? userData.id : 'None');
   }, []);
+  
+  // Custom signOut function that ensures proper cleanup
+  const signOut = useCallback(async () => {
+    console.log('AuthContext: Custom signOut called. Cleaning up before logout.');
+    
+    try {
+      // Pause all realtime subscriptions before signing out
+      // This helps ensure clean disconnection
+      supabase.realtime.setAuth(null);
+      
+      // Perform the actual sign out
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('AuthContext: Error during signOut:', error.message);
+        throw error;
+      }
+      
+      console.log('AuthContext: User signed out successfully with cleanup.');
+      return { error: null };
+    } catch (err) {
+      console.error('AuthContext: Caught error during signOut:', err.message);
+      return { error: err };
+    }
+  }, []);
 
   useEffect(() => {
     console.log('AuthContext: useEffect (auth listener setup) triggered. Runs once.');
+
+    // Function to handle realtime cleanup when user signs out
+    const cleanupRealtimeOnSignOut = () => {
+      console.log('AuthContext: Cleaning up realtime connections on sign out');
+      try {
+        // Pause all realtime subscriptions
+        supabase.realtime.setAuth(null);
+        
+        // Disconnect all channels
+        supabase.removeAllChannels();
+        
+        console.log('AuthContext: Realtime connections cleaned up successfully');
+      } catch (err) {
+        console.error('AuthContext: Error cleaning up realtime connections:', err.message);
+      }
+    };
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log(`AuthContext: onAuthStateChange event: ${event}. Session User ID: ${session ? session.user?.id : 'None'}.`);
 
         if (event === 'SIGNED_IN') {
+          // Ensure realtime auth is set with the new session
+          supabase.realtime.setAuth(session.access_token);
           setUser(session.user);
           console.log('AuthContext: User SIGNED_IN. User ID:', session.user.id);
         } else if (event === 'SIGNED_OUT') {
+          // Clean up realtime connections before setting user to null
+          cleanupRealtimeOnSignOut();
           setUser(null);
-          console.log('AuthContext: User SIGNED_OUT.');
+          console.log('AuthContext: User SIGNED_OUT with realtime cleanup.');
         } else if (event === 'INITIAL_SESSION' && session) {
+          // Ensure realtime auth is set with the initial session
+          supabase.realtime.setAuth(session.access_token);
           setUser(session.user);
           console.log('AuthContext: INITIAL_SESSION found. User ID:', session.user.id);
         } else if (event === 'TOKEN_REFRESHED' && session) {
+          // Update realtime auth with the refreshed token
+          supabase.realtime.setAuth(session.access_token);
           setUser(session.user);
           console.log('AuthContext: TOKEN_REFRESHED. User ID:', session.user.id);
         } else {
+          // For any other event without a session, clean up and set user to null
+          cleanupRealtimeOnSignOut();
           setUser(null);
-          console.log('AuthContext: Other event or no session. User set to null.');
+          console.log('AuthContext: Other event or no session. User set to null with cleanup.');
         }
         setLoading(false);
         console.log('AuthContext: Loading set to false. Current user (after event):', user ? user.id : 'None');
@@ -73,6 +137,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     supabase,
     signIn,
+    signOut, // Add the custom signOut function to the context
   };
 
   return (

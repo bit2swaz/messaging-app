@@ -1,38 +1,43 @@
 /* client/src/components/Layout.module.css */
-.loadingScreen {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  width: 100%;
-  background-color: #36393F; /* Discord dark background */
-  color: #DCDEE1;
-  font-size: 1.5em;
-}
+/* Add or adjust these styles to ensure mainContent has a height */
 
 .appLayout {
   display: flex;
-  min-height: 100vh;
-  width: 100vw; /* Take full viewport width */
-  overflow: hidden; /* Prevent horizontal scroll */
+  height: 100vh; /* Make sure the overall layout takes full viewport height */
+  overflow: hidden; /* Prevent body scroll if children overflow */
+  background-color: #2F3136; /* Discord dark background */
 }
 
 .sidebar {
-  width: 240px; /* Standard Discord sidebar width */
-  background-color: #2F3136; /* Discord sidebar dark grey */
-  padding: 15px;
+  flex: 0 0 240px; /* Fixed width sidebar */
+  background-color: #202225; /* Even darker for sidebar */
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  border-right: 1px solid #202225; /* Subtle separator */
+  padding: 15px;
+  overflow-y: auto; /* Allow sidebar to scroll if content exceeds height */
 }
 
+.mainContent {
+  flex: 1; /* Main content area takes remaining space */
+  display: flex;
+  flex-direction: column; /* Ensure children stack vertically */
+  min-width: 0; /* Important for flex items to prevent overflow issues */
+  min-height: 0; /* Important for flex items to allow children to scroll */
+  padding: 15px; /* Add some padding around the main content */
+  box-sizing: border-box; /* Include padding in width/height calculations */
+}
+
+/* Add or adjust other existing styles as needed */
+
+/* User section in sidebar */
 .userSection {
   display: flex;
   align-items: center;
   gap: 10px;
   padding-bottom: 15px;
-  border-bottom: 1px solid #424549; /* Lighter separator */
+  border-bottom: 1px solid #36393F;
+  margin-bottom: 15px;
+  color: #DCDEE1;
 }
 
 .avatar {
@@ -40,78 +45,37 @@
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #5865F2; /* Discord blue border */
+  background-color: #5865F2; /* Placeholder color */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.2em;
+  color: white;
 }
 
 .username {
-  color: #FFFFFF;
   font-weight: 600;
-  flex-grow: 1; /* Pushes logout button to end */
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
+  flex-grow: 1; /* Allows username to take space */
 }
 
 .logoutButton {
-  background-color: #ED4245; /* Discord red */
-  color: #FFFFFF;
+  background-color: #f04747; /* Discord red */
+  color: white;
+  border: none;
   padding: 8px 12px;
-  font-size: 0.85em;
   border-radius: 5px;
   cursor: pointer;
+  font-size: 0.85em;
+  font-weight: 500;
   transition: background-color 0.2s ease-in-out;
-  border: none;
 }
 
 .logoutButton:hover {
-  background-color: #C33538;
+  background-color: #cc3c3c;
 }
 
+/* Navigation for UserList */
 .navigation {
-  flex-grow: 1; /* Takes remaining space */
-}
-
-.navList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.navList li {
-  color: #B9BBBE; /* Lighter grey text */
-  padding: 10px 0;
-  cursor: pointer;
-  transition: color 0.2s ease-in-out;
-  text-align: left;
-}
-
-.navList li:hover {
-  color: #FFFFFF; /* White on hover */
-}
-
-.mainContent {
-  flex-grow: 1; /* Takes up all available space */
-  background-color: #36393F; /* Discord dark background for main content */
-  padding: 20px;
-  overflow-y: auto; /* Enable scrolling for chat content */
-  display: flex; /* Flexbox for consistent centering/alignment of chat window */
-  justify-content: center;
-  align-items: center; /* Initially center contents like Home.jsx */
-}
-
-/* Ensure body and #root cover full viewport for appLayout to work */
-body, #root {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  width: 100%;
-  overflow: hidden; /* Prevent body scroll if appLayout handles it */
-}
-
-/* Optional: Reset App.module.css if it causes conflicts */
-.app-container {
-  width: 100%;
-  min-height: 100vh;
-  display: flex;
-  /* Ensure it fits the screen, App.jsx handles the routing */
+  flex: 1; /* Allows navigation to take remaining sidebar space */
+  overflow-y: auto; /* If navigation content (UserList) grows too large */
 }

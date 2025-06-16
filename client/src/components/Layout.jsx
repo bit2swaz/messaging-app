@@ -6,7 +6,7 @@ import UserList from './UserList'; // Import UserList
 import styles from './Layout.module.css';
 
 const Layout = () => {
-  const { user, loading, supabase } = useAuth();
+  const { user, loading, supabase, signOut } = useAuth();
   const navigate = useNavigate();
 
   if (!loading && !user) {
@@ -20,14 +20,17 @@ const Layout = () => {
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
+      // Use the custom signOut function from AuthContext instead of direct supabase call
+      // This ensures proper cleanup of realtime connections
+      const { error } = await signOut();
       if (error) {
-        console.error('Logout Error:', error.message);
+        console.error('Layout: Logout error:', error.message);
       } else {
-        console.log('User logged out successfully.');
+        console.log('Layout: Logged out successfully with proper cleanup');
+        // No need to navigate here, AuthContext will handle it
       }
-    } catch (err) {
-      console.error('Caught logout error:', err.message);
+    } catch (error) {
+      console.error('Layout: Logout error:', error.message);
     }
   };
 

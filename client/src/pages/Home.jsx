@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import styles from './Home.module.css';
 
 const Home = () => {
-  const { user, loading, supabase } = useAuth();
+  const { user, loading, supabase, signOut } = useAuth();
   const [profile, setProfile] = useState(null);
   const [fetchError, setFetchError] = useState(null);
   const navigate = useNavigate();
@@ -40,21 +40,22 @@ const Home = () => {
   const handleLogout = async () => {
     setFetchError(null); // Clear any previous error messages
     try {
-      // Directly call Supabase client-side signOut
-      const { error } = await supabase.auth.signOut();
+      // Use the custom signOut function from AuthContext instead of direct supabase call
+      // This ensures proper cleanup of realtime connections
+      const { error } = await signOut();
 
       if (error) {
-        console.error('Supabase Logout Error:', error.message);
+        console.error('Home: Logout Error:', error.message);
         setFetchError(`Logout failed: ${error.message}`);
       } else {
         // Supabase's onAuthStateChange listener in AuthContext will now detect
         // the SIGNED_OUT event, set user to null, and trigger navigation.
-        console.log('Logged out successfully via Supabase client.');
-        // No need to manually removeItem from localStorage as supabase.auth.signOut() does this
+        console.log('Home: Logged out successfully with proper cleanup.');
+        // No need to manually removeItem from localStorage as signOut() does this
         // No need to navigate here either, as AuthContext handles it via onAuthStateChange
       }
     } catch (error) {
-      console.error('Logout Catch Error:', error.message);
+      console.error('Home: Logout Catch Error:', error.message);
       setFetchError(`Logout failed: ${error.message}`);
     }
   };
