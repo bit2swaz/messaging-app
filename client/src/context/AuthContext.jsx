@@ -2,24 +2,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client for the frontend
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// ADD THESE LOGS BACK IN
-console.log('AuthContext (Client Init): Supabase client initialization check:');
-console.log('AuthContext (Client Init): VITE_SUPABASE_URL received:', supabaseUrl);
-console.log('AuthContext (Client Init): VITE_SUPABASE_ANON_KEY received (first 5 chars):', supabaseAnonKey ? supabaseAnonKey.substring(0, 5) + '...' : 'None');
-
-
+// Removed verbose client init logs, assuming .env values are now verified.
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('AuthContext (Client Init): ERROR! Supabase URL or Anon Key are NOT DEFINED. Realtime WILL FAIL!');
-} else {
-  console.log('AuthContext (Client Init): Supabase URL and Anon Key appear to be defined.');
+  console.error('AuthContext: ERROR! Supabase URL or Anon Key are NOT DEFINED. Realtime WILL FAIL!');
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
-console.log('AuthContext (Client Init): Supabase client instance created.');
+// Removed client instance creation log, assuming it's now fine.
 
 
 const AuthContext = createContext(null);
@@ -28,9 +20,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // This custom signIn is useful if we want to immediately update context state
-  // after our *backend* API call for login, rather than waiting for Supabase's
-  // internal onAuthStateChange listener to fire.
   const signIn = useCallback((userData) => {
     setUser(userData);
     console.log('AuthContext: Custom signIn called. User state set:', userData ? userData.id : 'None');
@@ -39,46 +28,34 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     console.log('AuthContext: useEffect (auth listener setup) triggered. Runs once.');
 
-    // Listen for authentication state changes from Supabase
-    // This is the primary mechanism for getting the session and reacting to changes.
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log(`AuthContext: onAuthStateChange event: ${event}. Session User ID: ${session ? session.user?.id : 'None'}.`);
 
-        if (event === 'SIGNED_IN') {
-          // User has signed in or session was found on initial load
+        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
           setUser(session.user);
-          console.log('AuthContext: User SIGNED_IN. User ID:', session.user.id);
+          console.log('AuthContext: User SIGNED_IN/INITIAL_SESSION. User ID:', session.user.id);
         } else if (event === 'SIGNED_OUT') {
-          // User has signed out
           setUser(null);
           console.log('AuthContext: User SIGNED_OUT.');
-        } else if (event === 'INITIAL_SESSION' && session) {
-          // Initial session found when AuthProvider first loads
-          setUser(session.user);
-          console.log('AuthContext: INITIAL_SESSION found. User ID:', session.user.id);
         } else if (event === 'TOKEN_REFRESHED' && session) {
-          // Session token refreshed
           setUser(session.user);
           console.log('AuthContext: TOKEN_REFRESHED. User ID:', session.user.id);
         } else {
-          // Other events or initial session with no user
           setUser(null);
           console.log('AuthContext: Other event or no session. User set to null.');
         }
-        setLoading(false); // Once an auth state is determined, loading is complete.
+        setLoading(false);
         console.log('AuthContext: Loading set to false. Current user (after event):', user ? user.id : 'None');
       }
     );
 
-    // Clean up the listener when the component unmounts
     return () => {
       authListener.subscription.unsubscribe();
       console.log('AuthContext: Auth listener unsubscribed during cleanup.');
     };
-  }, []); // ENSURE THIS IS AN EMPTY DEPENDENCY ARRAY []
+  }, []); // Empty dependency array: ensures this effect runs ONLY ONCE on mount
 
-  // This log runs on every render of AuthProvider
   console.log('AuthContext: AuthProvider RENDER CYCLE. User State:', user ? user.id : 'None', 'Loading State:', loading);
 
   const value = {
@@ -90,7 +67,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children} {/* Render children only when auth state is determined */}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };
