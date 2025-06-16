@@ -5,13 +5,21 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Removed verbose client init logs, assuming .env values are now verified.
+// THESE ARE THE CRUCIAL LOGS TO VERIFY ENVIRONMENT VARIABLES.
+// ENSURE THESE ARE AT THE VERY TOP OF THE FILE, OUTSIDE ANY COMPONENT.
+console.log('--- AuthContext.jsx Initialization START (V2 DEBUG) ---');
+console.log('V2 DEBUG: VITE_SUPABASE_URL received:', supabaseUrl);
+console.log('V2 DEBUG: VITE_SUPABASE_ANON_KEY received (first 5 chars):', supabaseAnonKey ? supabaseAnonKey.substring(0, 5) + '...' : 'None');
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('AuthContext: ERROR! Supabase URL or Anon Key are NOT DEFINED. Realtime WILL FAIL!');
+  console.error('V2 DEBUG: ERROR! Supabase URL or Anon Key are NOT DEFINED. Realtime will likely fail!');
+} else {
+  console.log('V2 DEBUG: Supabase URL and Anon Key appear to be defined.');
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
-// Removed client instance creation log, assuming it's now fine.
+console.log('V2 DEBUG: Supabase client instance created. Realtime services should be available.');
+console.log('--- AuthContext.jsx Initialization END (V2 DEBUG) ---');
 
 
 const AuthContext = createContext(null);
@@ -32,12 +40,15 @@ export const AuthProvider = ({ children }) => {
       async (event, session) => {
         console.log(`AuthContext: onAuthStateChange event: ${event}. Session User ID: ${session ? session.user?.id : 'None'}.`);
 
-        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+        if (event === 'SIGNED_IN') {
           setUser(session.user);
-          console.log('AuthContext: User SIGNED_IN/INITIAL_SESSION. User ID:', session.user.id);
+          console.log('AuthContext: User SIGNED_IN. User ID:', session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           console.log('AuthContext: User SIGNED_OUT.');
+        } else if (event === 'INITIAL_SESSION' && session) {
+          setUser(session.user);
+          console.log('AuthContext: INITIAL_SESSION found. User ID:', session.user.id);
         } else if (event === 'TOKEN_REFRESHED' && session) {
           setUser(session.user);
           console.log('AuthContext: TOKEN_REFRESHED. User ID:', session.user.id);
