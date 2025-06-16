@@ -1,5 +1,5 @@
 // server/middleware/auth.js
-const { createClient } = require('@supabase/supabase-js');
+const { createClient } = require('@supabase/supabase-js'); // Still needed if you want client instance
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 dotenv.config();
@@ -43,18 +43,12 @@ const verifyToken = async (req, res, next) => {
     };
     console.log('VERIFYTOKEN DEBUG: JWT Decoded successfully. req.user set to:', req.user);
 
-    // --- CRITICAL FIX HERE: Use setAuth instead of setSession ---
-    // Create a basic Supabase client (without global headers for auth)
-    const userSupabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    // Explicitly set the authentication token for this client instance.
-    // This tells the client to use this JWT for all subsequent API requests.
-    userSupabase.auth.setAuth(token); // <--- Use setAuth here
-
-    console.log('VERIFYTOKEN DEBUG: Supabase client auth token successfully set for user:', req.user.id);
-
-    req.supabase = userSupabase; // Attach the user-scoped supabase client to the request object
-    // --- END CRITICAL FIX ---
+    // --- CRITICAL CHANGE: Pass the token directly on req for per-call use ---
+    req.userToken = token; // Store the raw token on req.userToken
+    // We still create a basic Supabase client, but its RLS context will be set per-query.
+    req.supabase = createClient(supabaseUrl, supabaseAnonKey);
+    console.log('VERIFYTOKEN DEBUG: Basic Supabase client created and raw token stored on req.userToken.');
+    // --- END CRITICAL CHANGE ---
 
     next();
   } catch (error) {
@@ -62,8 +56,6 @@ const verifyToken = async (req, res, next) => {
     if (error.message.includes('secret or public key must be provided')) {
       console.error('VERIFYTOKEN DEBUG: JWT_SECRET was likely invalid or undefined during jwt.verify!');
       console.error('VERIFYTOKEN DEBUG: Current JWT_SECRET value:', JWT_SECRET);
-    } else if (error.message.includes('Auth session missing!')) { // Log if setSession caused this specific error
-        console.error('VERIFYTOKEN DEBUG: setSession failed because the provided object was incomplete. Retrying with setAuth.');
     }
     return res.status(401).json({ error: 'Invalid or expired token.' });
   }
