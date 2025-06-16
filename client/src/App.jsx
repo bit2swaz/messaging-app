@@ -3,10 +3,11 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Auth from './pages/Auth';
-import Layout from './components/Layout'; // Import the new Layout component
-import Home from './pages/Home'; // We'll keep Home for now, but it will be wrapped by Layout
+import Layout from './components/Layout';
+import Home from './pages/Home';
+import ChatWindow from './components/ChatWindow'; // Import ChatWindow
 
-import './App.module.css'; // App.module.css styles are still relevant for overall container
+import './App.module.css';
 
 function App() {
   const { user, loading } = useAuth();
@@ -15,7 +16,6 @@ function App() {
 
   if (loading) {
     console.log('App.jsx: Showing loading container.');
-    // Using a simple div for loading as it's global to the app
     return (
       <div style={{
         display: 'flex',
@@ -23,7 +23,7 @@ function App() {
         alignItems: 'center',
         minHeight: '100vh',
         width: '100%',
-        backgroundColor: '#36393F', // Discord dark background
+        backgroundColor: '#36393F',
         color: '#DCDEE1',
         fontSize: '1.5em'
       }}>
@@ -35,21 +35,19 @@ function App() {
   console.log('App.jsx: Auth check complete. User exists:', !!user);
 
   return (
-    // The main app container from App.module.css is still useful here
-    <div className="app-container"> {/* Using a generic class name */}
+    <div className="app-container">
       <Routes>
-        {/* Auth Route: If logged in, redirect to home; otherwise, show Auth component */}
         <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <Auth />} />
 
-        {/* Protected routes wrapped by Layout */}
         <Route element={user ? <Layout /> : <Navigate to="/auth" replace />}>
-          {/* Default home route inside the layout */}
+          {/* Default home route inside the layout - could be a welcome or user profile view */}
           <Route path="/home" element={<Home />} />
-          {/* Other nested routes for chat rooms, user profiles, etc. will go here later */}
+          {/* Nested route for direct messages with a specific user */}
+          <Route path="/home/chat/:userId" element={<ChatWindow />} />
+          {/* Default redirect when logged in, if no specific sub-route is hit */}
           <Route path="/" element={<Navigate to="/home" replace />} />
         </Route>
 
-        {/* Fallback for any other undefined routes */}
         <Route path="*" element={<Navigate to={user ? "/home" : "/auth"} replace />} />
       </Routes>
     </div>
