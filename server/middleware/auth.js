@@ -43,25 +43,18 @@ const verifyToken = async (req, res, next) => {
     };
     console.log('VERIFYTOKEN DEBUG: JWT Decoded successfully. req.user set to:', req.user);
 
-    // --- CRITICAL NEW PART: Create basic client and THEN explicitly set session/auth ---
-    // First, create a basic Supabase client (without global headers for auth)
+    // --- CRITICAL FIX HERE: Use setAuth instead of setSession ---
+    // Create a basic Supabase client (without global headers for auth)
     const userSupabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    // Then, explicitly set the session/auth token.
-    // This often performs a local storage/cookie sync, but more importantly,
-    // it registers the token with this specific client instance for subsequent API calls.
-    const { data: { user, session }, error: setAuthError } = await userSupabase.auth.setSession({ access_token: token });
+    // Explicitly set the authentication token for this client instance.
+    // This tells the client to use this JWT for all subsequent API requests.
+    userSupabase.auth.setAuth(token); // <--- Use setAuth here
 
-    if (setAuthError) {
-      console.error('VERIFYTOKEN DEBUG: Error setting Supabase client session/auth:', setAuthError.message);
-      // If setting auth fails here, it indicates a very deep problem with the token itself or client setup
-      return res.status(401).json({ error: 'Failed to establish user session for Supabase client.' });
-    }
-
-    console.log('VERIFYTOKEN DEBUG: Supabase client session/auth successfully set for user:', user ? user.id : 'None');
+    console.log('VERIFYTOKEN DEBUG: Supabase client auth token successfully set for user:', req.user.id);
 
     req.supabase = userSupabase; // Attach the user-scoped supabase client to the request object
-    // --- END CRITICAL NEW PART ---
+    // --- END CRITICAL FIX ---
 
     next();
   } catch (error) {
@@ -69,6 +62,8 @@ const verifyToken = async (req, res, next) => {
     if (error.message.includes('secret or public key must be provided')) {
       console.error('VERIFYTOKEN DEBUG: JWT_SECRET was likely invalid or undefined during jwt.verify!');
       console.error('VERIFYTOKEN DEBUG: Current JWT_SECRET value:', JWT_SECRET);
+    } else if (error.message.includes('Auth session missing!')) { // Log if setSession caused this specific error
+        console.error('VERIFYTOKEN DEBUG: setSession failed because the provided object was incomplete. Retrying with setAuth.');
     }
     return res.status(401).json({ error: 'Invalid or expired token.' });
   }
