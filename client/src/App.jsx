@@ -5,7 +5,7 @@ import { useAuth } from './context/AuthContext';
 import Auth from './pages/Auth';
 import Layout from './components/Layout';
 import Home from './pages/Home';
-import ChatWindow from './components/ChatWindow'; // Import ChatWindow
+import ChatWindow from './components/ChatWindow';
 
 import './App.module.css';
 
@@ -44,6 +44,8 @@ function App() {
           <Route path="/home" element={<Home />} />
           {/* Nested route for direct messages with a specific user */}
           <Route path="/home/chat/:userId" element={<ChatWindow />} />
+          {/* NEW: Nested route for channel messages with a specific channel */}
+          <Route path="/home/channel/:channelId" element={<ChatWindow />} />
           {/* Default redirect when logged in, if no specific sub-route is hit */}
           <Route path="/" element={<Navigate to="/home" replace />} />
         </Route>
