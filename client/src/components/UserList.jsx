@@ -10,9 +10,6 @@ const UserList = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  // Keep track of the presence channel instance
-  const presenceChannelRef = useRef(null);
-
   // Effect to fetch all user profiles initially
   useEffect(() => {
     const fetchAllProfiles = async () => {
@@ -29,7 +26,7 @@ const UserList = () => {
         if (error) {
           throw error;
         }
-        setUsers(data || []); // Ensure data is an array
+        setUsers(data || []);
       } catch (err) {
         console.error('UserList: Error fetching all profiles:', err.message);
         setError('Failed to load user list.');
@@ -38,32 +35,17 @@ const UserList = () => {
     };
 
     fetchAllProfiles();
-  }, [supabase, currentUser]); // Re-run if supabase client or currentUser changes
+  }, [supabase, currentUser]);
 
-  // Effect for Supabase Realtime Presence Setup
+  // Effect for Supabase Realtime Presence Setup - Simplified and corrected
   useEffect(() => {
+    // Only proceed if supabase client and current user are available
     if (!supabase || !currentUser) {
-      // If not logged in, ensure we clean up any old channel and don't proceed
-      if (presenceChannelRef.current) {
-        console.log('UserList: User logged out/not present, unsubscribing from presence channel.');
-        presenceChannelRef.current.untrack();
-        presenceChannelRef.current.unsubscribe();
-        supabase.removeChannel(presenceChannelRef.current);
-        presenceChannelRef.current = null;
-      }
-      return; // Stop here if no current user
+      console.log('UserList: No current user or supabase client. Skipping presence subscription.');
+      return;
     }
 
-    // Ensure only one channel is subscribed at a time
-    if (presenceChannelRef.current) {
-      console.log('UserList: Existing presence channel found, unsubscribing before re-subscribing.');
-      presenceChannelRef.current.untrack();
-      presenceChannelRef.current.unsubscribe();
-      supabase.removeChannel(presenceChannelRef.current);
-      presenceChannelRef.current = null;
-    }
-
-    console.log('UserList: Subscribing to presence channel for user:', currentUser.id);
+    console.log('UserList: Setting up presence channel for user:', currentUser.id);
     const channel = supabase.channel('online_users', {
       config: {
         presence: {
@@ -72,14 +54,13 @@ const UserList = () => {
       },
     });
 
-    presenceChannelRef.current = channel; // Store channel instance
-
     channel
       .on('presence', { event: 'sync' }, () => {
         const presenceState = channel.presenceState();
         const onlineUserIds = Object.keys(presenceState); // Keys are the user IDs
 
         setUsers(prevUsers => {
+          // Map over all users and update their status based on onlineUserIds
           return prevUsers.map(u => ({
             ...u,
             status: onlineUserIds.includes(u.id) ? 'Online' : 'Offline',
@@ -125,17 +106,39 @@ const UserList = () => {
         }
       });
 
-    // --- Critical part: Handle browser tab closing/unloading ---
-    const handleBeforeUnload = () => {
+    // --- Cleanup function for this useEffect ---
+    // This runs when the component unmounts OR when currentUser changes (causing a re-run of this effect)
+    return () => {
+      console.log('UserList: useEffect cleanup - Cleaning up presence for user:', currentUser?.id);
+      // Ensure we have a channel to untrack/unsubscribe
       if (channel && channel.subscription.state === 'SUBSCRIBED') {
-        console.log('UserList: Before unload event - Untracking and unsubscribing from presence.');
-        // Use synchronous un-track if possible, or send a small beacon.
-        // For Supabase, untrack() and unsubscribe() are generally async but will send the message before browser fully closes.
+        console.log('UserList: Untracking and unsubscribing presence channel on cleanup.');
         try {
           channel.untrack();
           channel.unsubscribe();
           supabase.removeChannel(channel);
-          console.log('UserList: Successfully untracked/unsubscribed on beforeunload.');
+        } catch (err) {
+          console.error('UserList: Error during untrack/unsubscribe in cleanup:', err.message);
+        }
+      }
+    };
+  }, [supabase, currentUser]); // Dependencies: Re-subscribe if supabase or current user changes
+
+  // --- Browser unload event listener (outside of the main presence useEffect) ---
+  // This needs to be a separate effect or handled carefully if it was still causing issues.
+  // Given the current problem, we will re-integrate it, but ensure it only sets up once.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Access the channel directly or via supabase.getChannel if needed
+      // Find the channel instance you care about
+      const channelToUntrack = supabase.getChannel('online_users'); // Get by name
+
+      if (channelToUntrack && channelToUntrack.subscription.state === 'SUBSCRIBED') {
+        console.log('UserList: Before unload event - Untracking and unsubscribing from presence.');
+        try {
+          channelToUntrack.untrack();
+          channelToUntrack.unsubscribe();
+          supabase.removeChannel(channelToUntrack);
         } catch (err) {
           console.error('UserList: Error during untrack/unsubscribe on beforeunload:', err.message);
         }
@@ -144,21 +147,11 @@ const UserList = () => {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Cleanup: This runs when useEffect re-runs or component unmounts normally
     return () => {
-      console.log('UserList: useEffect cleanup - Running cleanup for presence.');
-      if (presenceChannelRef.current) {
-        console.log('UserList: useEffect cleanup - Untracking and unsubscribing presence channel.');
-        presenceChannelRef.current.untrack();
-        presenceChannelRef.current.unsubscribe();
-        supabase.removeChannel(presenceChannelRef.current);
-        presenceChannelRef.current = null;
-      }
-      // Remove the global event listener
       window.removeEventListener('beforeunload', handleBeforeUnload);
       console.log('UserList: Before unload listener removed.');
     };
-  }, [supabase, currentUser]); // Key: This re-runs when currentUser changes (e.g., login/logout)
+  }, [supabase]); // Depend only on supabase to attach listener once per supabase client instance
 
   const handleUserClick = (userId) => {
     navigate(`/home/chat/${userId}`);
