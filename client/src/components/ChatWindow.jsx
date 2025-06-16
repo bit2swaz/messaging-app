@@ -68,16 +68,16 @@ const ChatWindow = () => {
 
     const fetchMessages = async () => {
       try {
-        // SELECT query with join to profiles for sender info
+        // --- CRITICAL FIX HERE: Removed comments from select string ---
         let query = supabase.from('messages')
           .select(`
             id,
             content,
             created_at,
-            sender_id, // Keep the raw sender_id for comparison
+            sender_id,
             receiver_id,
             channel_id,
-            profiles(username, avatar_url) // Fetch sender's profile for display
+            profiles(username, avatar_url)
           `)
           .order('created_at', { ascending: true });
 
@@ -143,15 +143,13 @@ const ChatWindow = () => {
           const senderProfile = senderProfileData || { username: 'Unknown', avatar_url: null };
 
           setMessages((prevMessages) => {
-            // Check if message already exists (e.g., from optimistic update)
             if (prevMessages.find(msg => msg.id === newMessagePayload.id)) {
                 return prevMessages.map(msg =>
                     msg.id === newMessagePayload.id
-                        ? { ...newMessagePayload, senderProfile, is_optimistic: false } // Update optimistic with full data
+                        ? { ...newMessagePayload, senderProfile, is_optimistic: false }
                         : msg
                 );
             }
-            // Add new message with fetched sender profile
             return [...prevMessages, { ...newMessagePayload, senderProfile }];
           });
           console.log('ChatWindow: New relevant message received via Realtime (with sender profile):', newMessagePayload);
@@ -198,8 +196,8 @@ const ChatWindow = () => {
     const tempId = `temp-${Date.now()}-${Math.random()}`;
     const optimisticMessage = {
       id: tempId,
-      sender_id: currentUser.id, // Store raw ID for comparison in DB insertion
-      senderProfile: { // Mock profile for immediate UI update
+      sender_id: currentUser.id,
+      senderProfile: {
         username: currentUser.user_metadata?.username || currentUser.email,
         avatar_url: currentUser.user_metadata?.avatar_url
       },
@@ -229,15 +227,9 @@ const ChatWindow = () => {
       if (error) {
         throw error;
       }
-      // No need to update messages state here if Realtime listener is fast enough.
-      // The Realtime listener should now correctly add the message with senderProfile.
-      // If needed for slower Realtime, ensure mapping replaces optimistic and adds senderProfile.
-      // For now, let Realtime be the source of truth after optimistic.
-
     } catch (err) {
       console.error('ChatWindow: Caught error in handleSendMessage:', err.message);
       setError(`Failed to send message: ${err.message}`);
-      // Revert optimistic message if send fails
       setMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempId));
     }
   };
@@ -278,7 +270,7 @@ const ChatWindow = () => {
           <div
             key={msg.id}
             className={`${styles.messageBubble} ${
-              msg.sender_id === currentUser.id ? styles.sent : styles.received
+              msg.sender_id === currentUser.id ? styles.sent : styles.received // msg.sender_id is the raw ID string here
             } ${msg.is_optimistic ? styles.optimisticMessage : ''}`}
           >
             {/* Display sender's username ONLY for received messages in channels */}
