@@ -1,0 +1,117 @@
+/* client/src/components/Layout.module.css */
+.loadingScreen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+  background-color: #36393F; /* Discord dark background */
+  color: #DCDEE1;
+  font-size: 1.5em;
+}
+
+.appLayout {
+  display: flex;
+  min-height: 100vh;
+  width: 100vw; /* Take full viewport width */
+  overflow: hidden; /* Prevent horizontal scroll */
+}
+
+.sidebar {
+  width: 240px; /* Standard Discord sidebar width */
+  background-color: #2F3136; /* Discord sidebar dark grey */
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border-right: 1px solid #202225; /* Subtle separator */
+}
+
+.userSection {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #424549; /* Lighter separator */
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #5865F2; /* Discord blue border */
+}
+
+.username {
+  color: #FFFFFF;
+  font-weight: 600;
+  flex-grow: 1; /* Pushes logout button to end */
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.logoutButton {
+  background-color: #ED4245; /* Discord red */
+  color: #FFFFFF;
+  padding: 8px 12px;
+  font-size: 0.85em;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+  border: none;
+}
+
+.logoutButton:hover {
+  background-color: #C33538;
+}
+
+.navigation {
+  flex-grow: 1; /* Takes remaining space */
+}
+
+.navList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.navList li {
+  color: #B9BBBE; /* Lighter grey text */
+  padding: 10px 0;
+  cursor: pointer;
+  transition: color 0.2s ease-in-out;
+  text-align: left;
+}
+
+.navList li:hover {
+  color: #FFFFFF; /* White on hover */
+}
+
+.mainContent {
+  flex-grow: 1; /* Takes up all available space */
+  background-color: #36393F; /* Discord dark background for main content */
+  padding: 20px;
+  overflow-y: auto; /* Enable scrolling for chat content */
+  display: flex; /* Flexbox for consistent centering/alignment of chat window */
+  justify-content: center;
+  align-items: center; /* Initially center contents like Home.jsx */
+}
+
+/* Ensure body and #root cover full viewport for appLayout to work */
+body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden; /* Prevent body scroll if appLayout handles it */
+}
+
+/* Optional: Reset App.module.css if it causes conflicts */
+.app-container {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  /* Ensure it fits the screen, App.jsx handles the routing */
+}
