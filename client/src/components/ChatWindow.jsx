@@ -17,27 +17,18 @@ const ChatWindow = () => {
   // Effect to fetch recipient profile
   useEffect(() => {
     const fetchRecipientProfile = async () => {
-      if (!supabase || !recipientId) {
-        console.log('ChatWindow: Skipping fetchRecipientProfile - Supabase or recipientId not ready.');
-        return;
-      }
-      console.log(`ChatWindow: Fetching recipient profile for ID: ${recipientId}`);
+      if (!supabase || !recipientId) return;
       try {
         const { data, error } = await supabase
           .from('profiles')
           .select('id, username, avatar_url')
           .eq('id', recipientId)
           .single();
-
-        if (error) {
-          console.error('ChatWindow: Error fetching recipient profile:', error.message);
-          throw error;
-        }
+        if (error) throw error;
         setRecipient(data);
-        console.log('ChatWindow: Recipient profile fetched:', data.username);
       } catch (err) {
-        console.error('ChatWindow: Caught error in fetchRecipientProfile:', err.message);
-        setError(`Failed to load recipient profile: ${err.message}`);
+        console.error('Error fetching recipient profile:', err.message);
+        setError('Failed to load recipient profile.');
         setRecipient(null);
       }
     };
@@ -46,33 +37,21 @@ const ChatWindow = () => {
 
   // Effect to fetch messages and set up Realtime listener
   useEffect(() => {
-    if (!supabase || !currentUser || !recipientId) {
-      console.log('ChatWindow: Skipping message fetch/listener setup - Supabase, currentUser, or recipientId not ready.');
-      return;
-    }
+    if (!supabase || !currentUser || !recipientId) return;
 
     setError(null);
-    console.log(`ChatWindow: Setting up message fetch and listener for chat with ${recipientId}`);
 
     const fetchMessages = async () => {
-      console.log('ChatWindow: Attempting to fetch initial messages.');
       try {
         const { data, error } = await supabase
           .from('messages')
           .select('*')
-          // FIX IS HERE: Removed redundant outer parentheses from each inner condition
           .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${recipientId},sender_id.eq.${recipientId},receiver_id.eq.${currentUser.id}`)
           .order('created_at', { ascending: true });
-
-        if (error) {
-          console.error('ChatWindow: Error fetching initial messages from Supabase:', error.message);
-          throw error;
-        }
-
+        if (error) throw error;
         setMessages(data);
-        console.log(`ChatWindow: Fetched ${data.length} messages.`);
       } catch (err) {
-        console.error('ChatWindow: Caught error during initial message fetch:', err.message);
+        console.error('ChatWindow: Error fetching initial messages from Supabase:', err.message);
         setError(`Failed to load messages: ${err.message}`);
         setMessages([]);
       }
@@ -81,23 +60,23 @@ const ChatWindow = () => {
     fetchMessages();
 
     const channelName = `dm_${[currentUser.id, recipientId].sort().join('_')}`;
-    console.log(`ChatWindow: Subscribing to Realtime channel: ${channelName}`);
-
     const channel = supabase
       .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const newMessagePayload = payload.new;
-        console.log('ChatWindow: Realtime payload received:', newMessagePayload);
-
         const isRelevant =
           (newMessagePayload.sender_id === currentUser.id && newMessagePayload.receiver_id === recipientId) ||
           (newMessagePayload.sender_id === recipientId && newMessagePayload.receiver_id === currentUser.id);
 
         if (isRelevant) {
-          setMessages((prevMessages) => [...prevMessages, newMessagePayload]);
-          console.log('ChatWindow: Added new message from Realtime to state.');
-        } else {
-          console.log('ChatWindow: Realtime message not relevant to current chat.');
+          // Check if the message is already in state (from optimistic update)
+          // This prevents duplicates if optimistic update added it and then Realtime sends it back
+          setMessages((prevMessages) => {
+            if (!prevMessages.find(msg => msg.id === newMessagePayload.id)) {
+              return [...prevMessages, newMessagePayload];
+            }
+            return prevMessages; // Message already exists, no duplicate
+          });
         }
       })
       .subscribe((status) => {
@@ -108,13 +87,12 @@ const ChatWindow = () => {
         }
       });
 
-
     return () => {
-      console.log('ChatWindow: Unsubscribing from message channel and removing.');
       supabase.removeChannel(channel);
     };
   }, [supabase, currentUser, recipientId]);
 
+  // Effect for auto-scrolling to the bottom of messages
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -130,28 +108,50 @@ const ChatWindow = () => {
 
     setError(null);
 
+    // Optimistic UI: Create a temporary message ID and add the message to the state immediately
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const optimisticMessage = {
+      id: tempId, // Temporary ID
+      sender_id: currentUser.id,
+      receiver_id: recipientId,
+      content: newMessage.trim(),
+      created_at: new Date().toISOString(), // Use client-side timestamp for immediate display
+      is_optimistic: true, // Flag to identify optimistic message
+    };
+
+    setMessages((prevMessages) => [...prevMessages, optimisticMessage]);
+    setNewMessage(''); // Clear input field immediately
+
     try {
       const messageToInsert = {
         sender_id: currentUser.id,
         receiver_id: recipientId,
-        content: newMessage.trim(),
+        content: optimisticMessage.content, // Use content from optimistic message
       };
-      console.log('ChatWindow: Attempting to send message:', messageToInsert);
+
       const { data, error } = await supabase
         .from('messages')
         .insert([messageToInsert])
-        .select();
+        .select(); // Get the actual message from DB with its real ID
 
       if (error) {
-        console.error('ChatWindow: Error inserting message to Supabase:', error.message);
         throw error;
       }
 
-      console.log('ChatWindow: Message sent successfully to DB. Inserted data:', data);
-      setNewMessage('');
+      // Replace optimistic message with the actual message from the database
+      // The Realtime listener will also receive this, but this handles potential race conditions
+      // and ensures the actual message ID and server-generated created_at are used.
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === tempId ? { ...data[0], is_optimistic: false } : msg
+        )
+      );
+
     } catch (err) {
       console.error('ChatWindow: Caught error in handleSendMessage:', err.message);
       setError(`Failed to send message: ${err.message}`);
+      // If send fails, remove the optimistic message
+      setMessages((prevMessages) => prevMessages.filter(msg => msg.id !== tempId));
     }
   };
 
@@ -183,7 +183,7 @@ const ChatWindow = () => {
             key={msg.id}
             className={`${styles.messageBubble} ${
               msg.sender_id === currentUser.id ? styles.sent : styles.received
-            }`}
+            } ${msg.is_optimistic ? styles.optimisticMessage : ''}`} /* Apply optimistic style */
           >
             <p className={styles.messageContent}>{msg.content}</p>
             <span className={styles.messageTimestamp}>
