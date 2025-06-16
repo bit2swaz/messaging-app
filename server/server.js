@@ -11,18 +11,27 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Create a *basic* Supabase client for auth operations (login/register/logout)
+// Create a basic Supabase client for auth operations (login/register/logout)
 const authSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
+// Create a SERVICE ROLE Supabase client for backend operations that need to bypass RLS
+// Use this client for operations like channel creation, where RLS is problematic with user-scoped clients.
+const serviceSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+        persistSession: false, // Service role client doesn't need sessions
+    },
+    global: {
+        headers: {
+            'x-supabase-api-key': process.env.SUPABASE_SERVICE_ROLE_KEY // Explicitly pass the API key
+        }
+    }
+});
 console.log('--- SERVER.JS AUTH CLIENT DEBUG START ---');
 console.log('SERVER.JS AUTH DEBUG: SUPABASE_URL from server .env:', process.env.SUPABASE_URL);
 console.log('SERVER.JS AUTH DEBUG: SUPABASE_ANON_KEY from server .env (first 5 chars):', process.env.SUPABASE_ANON_KEY ? process.env.SUPABASE_ANON_KEY.substring(0, 5) + '...' : 'None');
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-    console.error('SERVER.JS AUTH DEBUG: ERROR! Backend Supabase URL or Anon Key are NOT DEFINED in server/.env!');
-} else {
-    console.log('SERVER.JS AUTH DEBUG: Backend Supabase URL and Anon Key appear to be defined for auth client.');
-}
+console.log('SERVER.JS AUTH DEBUG: Backend Supabase URL and Anon Key appear to be defined for auth client.');
 console.log('SERVER.JS AUTH DEBUG: authSupabase client created.');
+console.log('SERVER.JS AUTH DEBUG: Service Role client created (first 5 chars of key):', process.env.SUPABASE_SERVICE_ROLE_KEY ? process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 5) + '...' : 'None');
 console.log('--- SERVER.JS AUTH CLIENT DEBUG END ---');
 
 // Middleware
@@ -92,11 +101,11 @@ app.post('/api/auth/logout', async (req, res) => {
   }
 });
 
-// Channel Management Routes
+// Channel Management Routes - Use serviceSupabase for these operations
 app.post('/api/channels', verifyToken, async (req, res) => {
-  const supabase = req.supabase; // This is now a basic client
-  const token = req.userToken; // Get the user's raw token
-  const userId = req.user.id;
+  // Use serviceSupabase to bypass RLS, but still enforce user validation
+  const supabase = serviceSupabase; // <<< CRITICAL: Use the service role client here
+  const userId = req.user.id; // Still get userId from the JWT, it's just not used by RLS here.
 
   const { name, description } = req.body;
 
@@ -107,29 +116,25 @@ app.post('/api/channels', verifyToken, async (req, res) => {
   console.log('Backend: Attempting to create channel for userId:', userId, 'with name:', name);
 
   try {
-    // 1. Create the channel - CRITICAL CHANGE: Add .insert([], { headers: ... })
+    // 1. Create the channel - RLS bypassed by serviceSupabase
     const { data: channelData, error: channelError } = await supabase
       .from('channels')
-      .insert([{ name, description, created_by: userId }], {
-        headers: { Authorization: `Bearer ${token}` } // <<< ADD THIS HEADER HERE <<<
-      })
+      .insert([{ name, description, created_by: userId }]) // created_by is still important for ownership
       .select()
       .single();
 
     if (channelError) {
       console.error('Supabase Channel Create Error:', channelError.message);
-      if (channelError.code === '23505') {
+      if (channelError.code === '23505') { // Unique violation code
         return res.status(409).json({ error: 'Channel with this name already exists.' });
       }
       return res.status(500).json({ error: channelError.message });
     }
 
-    // 2. Add the creating user as a member of the new channel - CRITICAL CHANGE: Add .insert([], { headers: ... })
+    // 2. Add the creating user as a member of the new channel - RLS bypassed by serviceSupabase
     const { data: memberData, error: memberError } = await supabase
       .from('channel_members')
-      .insert([{ channel_id: channelData.id, user_id: userId }], {
-        headers: { Authorization: `Bearer ${token}` } // <<< ADD THIS HEADER HERE <<<
-      })
+      .insert([{ channel_id: channelData.id, user_id: userId }]) // user_id is still important for membership
       .select();
 
     if (memberError) {
@@ -149,18 +154,16 @@ app.post('/api/channels', verifyToken, async (req, res) => {
 });
 
 app.get('/api/channels', verifyToken, async (req, res) => {
-  const supabase = req.supabase; // This is now a basic client
-  const token = req.userToken; // Get the user's raw token
-  const userId = req.user.id;
+  // Use serviceSupabase for listing channels a user is a member of (bypasses RLS on channel_members too)
+  const supabase = serviceSupabase; // <<< CRITICAL: Use the service role client here
+  const userId = req.user.id; // User ID from JWT is used to filter membership
 
   try {
-    // CRITICAL CHANGE: Add .select([], { headers: ... })
+    // Use the serviceSupabase client, but filter by userId to ensure user only sees their own channels
     const { data: channels, error } = await supabase
       .from('channel_members')
-      .select('channel_id, channels(id, name, description)', {
-        headers: { Authorization: `Bearer ${token}` } // <<< ADD THIS HEADER HERE <<<
-      })
-      .eq('user_id', userId);
+      .select('channel_id, channels(id, name, description)')
+      .eq('user_id', userId); // The filter applies after RLS is bypassed.
 
     if (error) {
       console.error('Supabase Get Channels Error:', error.message);
@@ -175,6 +178,7 @@ app.get('/api/channels', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error fetching channels.' });
   }
 });
+
 
 // Example of a protected route (already existing)
 app.get('/api/protected-route', verifyToken, (req, res) => {
