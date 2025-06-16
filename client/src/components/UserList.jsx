@@ -128,8 +128,7 @@ const UserList = () => {
     // Final cleanup function for THIS specific useEffect run
     return () => {
       console.log('UserList: useEffect RETURN cleanup for user:', currentUser?.id);
-      // This is the primary unsubscription mechanism for normal React lifecycle
-      if (channel && channel.subscription.state === 'SUBSCRIBED') { // Safe check
+      if (channel) { // Just check if channel object exists
         console.log('UserList: Untracking and unsubscribing presence channel on useEffect cleanup.');
         try {
           channel.untrack();
@@ -145,19 +144,21 @@ const UserList = () => {
   // --- Separate useEffect for global window.beforeunload event ---
   useEffect(() => {
     const handleGlobalBeforeUnload = () => {
-      // This is a last-ditch effort for abrupt browser closures.
-      // It accesses the channel by name as 'channel' from outer scope might be stale.
       const channelToUntrack = supabase.getChannel('online_users');
 
-      if (channelToUntrack && channelToUntrack.subscription.state === 'SUBSCRIBED') { // Safe check
+      // FIX IS HERE: More robust check for channel and its subscription object
+      if (channelToUntrack && channelToUntrack.subscription) {
         console.log('UserList: Global beforeunload event - Untracking and unsubscribing from presence.');
         try {
+          // untrack() and unsubscribe() are generally safe to call even if not fully SUBSCRIBED
           channelToUntrack.untrack();
           channelToUntrack.unsubscribe();
           supabase.removeChannel(channelToUntrack);
         } catch (err) {
           console.error('UserList: Error during untrack/unsubscribe on global beforeunload:', err.message);
         }
+      } else {
+        console.log('UserList: Global beforeunload - No active channel or subscription found to untrack.');
       }
     };
 
