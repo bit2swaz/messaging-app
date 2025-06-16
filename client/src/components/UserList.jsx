@@ -1,25 +1,26 @@
 // client/src/components/UserList.jsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import { useAuth } from '../context/AuthContext';
-import styles from './UserList.module.css'; // CSS Module for this component
+import styles from './UserList.module.css';
 
 const UserList = () => {
-  const { supabase, user: currentUser } = useAuth(); // Get supabase client and current logged-in user
+  const { supabase, user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [error, setError] = useState(null);
+  const navigate = useNavigate(); // Initialize useNavigate
 
   useEffect(() => {
     if (!supabase || !currentUser) {
-      return; // Wait for supabase client and current user to be available
+      return;
     }
 
     const fetchUsers = async () => {
       try {
-        // Fetch all user profiles except the current user's
         const { data, error } = await supabase
           .from('profiles')
           .select('id, username, avatar_url, status')
-          .neq('id', currentUser.id); // Exclude the current user
+          .neq('id', currentUser.id);
 
         if (error) {
           throw error;
@@ -35,45 +36,31 @@ const UserList = () => {
 
     fetchUsers();
 
-    // --- Supabase Realtime Presence Setup ---
-    // Join a presence channel. We'll use a generic 'online_users' channel
-    // and send the current user's ID and status when they come online.
     const channel = supabase.channel('online_users', {
       config: {
         presence: {
-          key: currentUser.id, // Unique key for the current user in this channel
+          key: currentUser.id,
         },
       },
     });
 
-    // Subscribe to presence changes
     channel
       .on('presence', { event: 'sync' }, () => {
-        // 'sync' event fires initially and when presence state changes
         const presenceState = channel.presenceState();
-        console.log('UserList: Presence sync event. State:', presenceState);
-
-        const onlineUserIds = Object.keys(presenceState).map(key => key);
-        console.log('UserList: Online user IDs:', onlineUserIds);
+        const onlineUserIds = Object.values(presenceState).flat().map(p => p.user_id); // Get user_id from tracked data
 
         setUsers(prevUsers => {
-          return prevUsers.map(u => {
-            // Determine if the user is currently online based on presenceState
-            const isOnline = onlineUserIds.includes(u.id);
-            return {
-              ...u,
-              // Update status based on presence. If previously 'Offline' and now detected, set 'Online'
-              status: isOnline ? 'Online' : 'Offline',
-            };
-          });
+          return prevUsers.map(u => ({
+            ...u,
+            status: onlineUserIds.includes(u.id) ? 'Online' : 'Offline',
+          }));
         });
       })
       .on('presence', { event: 'join' }, ({ newPresences }) => {
         console.log('UserList: User(s) JOINED presence:', newPresences);
-        // On join, immediately update the status of the joined users
         setUsers(prevUsers => {
           return prevUsers.map(u => {
-            const joinedUser = newPresences.find(p => p.key === u.id);
+            const joinedUser = newPresences.find(p => p.key === u.id); // 'key' is the user.id we tracked
             return {
               ...u,
               status: joinedUser ? 'Online' : u.status,
@@ -83,7 +70,6 @@ const UserList = () => {
       })
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
         console.log('UserList: User(s) LEFT presence:', leftPresences);
-        // On leave, immediately set the status of left users to 'Offline'
         setUsers(prevUsers => {
           return prevUsers.map(u => {
             const leftUser = leftPresences.find(p => p.key === u.id);
@@ -96,12 +82,11 @@ const UserList = () => {
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          // Announce presence when subscribed
           console.log('UserList: Presence channel SUBSCRIBED. Announcing presence...');
           const { error: trackError } = await channel.track({
-            user_id: currentUser.id,
+            user_id: currentUser.id, // Ensure we track user_id here for easy lookup
             username: currentUser.user_metadata?.username || currentUser.email,
-            status: 'Online', // Initial status when joining
+            status: 'Online',
           });
           if (trackError) {
             console.error('UserList: Error tracking presence:', trackError.message);
@@ -109,14 +94,17 @@ const UserList = () => {
         }
       });
 
-    // Cleanup: Remove presence when component unmounts and unsubscribe from channel
     return () => {
       console.log('UserList: Cleaning up presence listener and removing self from presence.');
-      channel.untrack(); // Remove user from presence state
-      channel.unsubscribe(); // Unsubscribe from the channel
+      channel.untrack();
+      channel.unsubscribe();
     };
 
-  }, [supabase, currentUser]); // Re-run effect if supabase client or currentUser changes
+  }, [supabase, currentUser]);
+
+  const handleUserClick = (userId) => {
+    navigate(`/home/chat/${userId}`); // Navigate to the chat window for the selected user
+  };
 
   if (error) {
     return <div className={styles.error}>{error}</div>;
@@ -127,26 +115,26 @@ const UserList = () => {
       <h3 className={styles.listHeader}>Online Users</h3>
       <ul className={styles.userList}>
         {users.filter(u => u.status === 'Online').map(user => (
-          <li key={user.id} className={styles.userListItem}>
+          <li key={user.id} className={styles.userListItem} onClick={() => handleUserClick(user.id)}>
             <img
               src={user.avatar_url || `https://placehold.co/24x24/3BA55D/FFFFFF?text=${user.username ? user.username[0].toUpperCase() : '?'}`}
               alt={`${user.username}'s Avatar`}
               className={styles.userAvatar}
             />
             <span className={styles.username}>{user.username}</span>
-            <span className={styles.statusIndicatorOnline}></span> {/* Green dot */}
+            <span className={styles.statusIndicatorOnline}></span>
           </li>
         ))}
         <h3 className={styles.listHeader}>Offline Users</h3>
         {users.filter(u => u.status === 'Offline').map(user => (
-          <li key={user.id} className={styles.userListItem}>
+          <li key={user.id} className={styles.userListItem} onClick={() => handleUserClick(user.id)}>
             <img
               src={user.avatar_url || `https://placehold.co/24x24/72767D/FFFFFF?text=${user.username ? user.username[0].toUpperCase() : '?'}`}
               alt={`${user.username}'s Avatar`}
               className={styles.userAvatar}
             />
             <span className={styles.username}>{user.username}</span>
-            <span className={styles.statusIndicatorOffline}></span> {/* Grey dot */}
+            <span className={styles.statusIndicatorOffline}></span>
           </li>
         ))}
       </ul>
