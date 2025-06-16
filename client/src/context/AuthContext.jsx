@@ -2,14 +2,25 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+// Initialize Supabase client for the frontend
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// ADD THESE LOGS BACK IN
+console.log('AuthContext (Client Init): Supabase client initialization check:');
+console.log('AuthContext (Client Init): VITE_SUPABASE_URL received:', supabaseUrl);
+console.log('AuthContext (Client Init): VITE_SUPABASE_ANON_KEY received (first 5 chars):', supabaseAnonKey ? supabaseAnonKey.substring(0, 5) + '...' : 'None');
+
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase URL or Anon Key are not defined in VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+  console.error('AuthContext (Client Init): ERROR! Supabase URL or Anon Key are NOT DEFINED. Realtime WILL FAIL!');
+} else {
+  console.log('AuthContext (Client Init): Supabase URL and Anon Key appear to be defined.');
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+console.log('AuthContext (Client Init): Supabase client instance created.');
+
 
 const AuthContext = createContext(null);
 
@@ -32,7 +43,7 @@ export const AuthProvider = ({ children }) => {
     // This is the primary mechanism for getting the session and reacting to changes.
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log(`AuthContext: onAuthStateChange event: ${event}. Session: ${session ? session.user?.id : 'None'}.`);
+        console.log(`AuthContext: onAuthStateChange event: ${event}. Session User ID: ${session ? session.user?.id : 'None'}.`);
 
         if (event === 'SIGNED_IN') {
           // User has signed in or session was found on initial load
@@ -65,7 +76,7 @@ export const AuthProvider = ({ children }) => {
       authListener.subscription.unsubscribe();
       console.log('AuthContext: Auth listener unsubscribed during cleanup.');
     };
-  }, []); // Empty dependency array: ensures this effect runs ONLY ONCE on mount
+  }, []); // ENSURE THIS IS AN EMPTY DEPENDENCY ARRAY []
 
   // This log runs on every render of AuthProvider
   console.log('AuthContext: AuthProvider RENDER CYCLE. User State:', user ? user.id : 'None', 'Loading State:', loading);
