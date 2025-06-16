@@ -2,7 +2,7 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
+const { createClient } = require('@supabase/supabase-js'); // Still need createClient for initial setup if needed later
 const verifyToken = require('./middleware/auth');
 
 // Load environment variables from .env file
@@ -11,10 +11,14 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// IMPORTANT: REMOVE OR COMMENT OUT THE GLOBAL SUPABASE CLIENT
+// const supabaseUrl = process.env.SUPABASE_URL;
+// const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+// const supabase = createClient(supabaseUrl, supabaseAnonKey); // <--- REMOVE THIS GLOBAL INSTANCE if using request-scoped
+
+// If you need a Supabase client that operates with the Service Role Key (bypassing RLS for admin tasks),
+// you would create it here using process.env.SUPABASE_SERVICE_ROLE_KEY.
+// For now, we'll primarily use the request-scoped client.
 
 // Middleware
 app.use(cors());
@@ -26,6 +30,18 @@ app.get('/', (req, res) => {
 });
 
 // Authentication Routes
+// These routes do NOT need RLS based on auth.uid(), as they interact with auth directly
+// We can temporarily use a basic client or assume Supabase handles auth internally without RLS
+// For simplicity, let's re-add a basic client *just for auth routes* if needed, or better:
+// Use the client passed by verifyToken for /api/channels, and create a barebones for login/register if needed.
+// For now, these routes don't use 'supabase' to apply RLS on table operations.
+// The `supabase` import here refers to the Supabase client library itself.
+// The actual client instance for auth operations needs to be separate if not using request-scoped.
+
+// Let's create a *basic* Supabase client for auth operations, as these don't involve RLS policies on tables
+const authSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, username } = req.body;
 
@@ -34,7 +50,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await authSupabase.auth.signUp({ // Use authSupabase
       email,
       password,
       options: {
@@ -68,7 +84,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await authSupabase.auth.signInWithPassword({ // Use authSupabase
       email,
       password,
     });
@@ -92,7 +108,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/logout', async (req, res) => {
   try {
-    const { error: authError } = await supabase.auth.signOut();
+    const { error: authError } = await authSupabase.auth.signOut(); // Use authSupabase
 
     if (authError) {
       console.error('Supabase Logout Error:', authError.message);
@@ -106,21 +122,23 @@ app.post('/api/auth/logout', async (req, res) => {
   }
 });
 
-// Channel Management Routes (NEW)
+// Channel Management Routes
 app.post('/api/channels', verifyToken, async (req, res) => {
+  // Now, req.supabase is the client configured with the user's JWT
+  const supabase = req.supabase; // <<< USE THE REQUEST-SCOPED CLIENT HERE <<<
+  const userId = req.user.id;
+
   const { name, description } = req.body;
-  const userId = req.user.id; // User ID comes from verifyToken middleware
 
   if (!name) {
     return res.status(400).json({ error: 'Channel name is required.' });
   }
 
-  // >>> ADD THIS DEBUG LOG <<<
   console.log('Backend: Attempting to create channel for userId:', userId, 'with name:', name);
 
   try {
     // 1. Create the channel
-    const { data: channelData, error: channelError } = await supabase
+    const { data: channelData, error: channelError } = await supabase // Use req.supabase
       .from('channels')
       .insert([{ name, description, created_by: userId }])
       .select()
@@ -128,14 +146,14 @@ app.post('/api/channels', verifyToken, async (req, res) => {
 
     if (channelError) {
       console.error('Supabase Channel Create Error:', channelError.message);
-      if (channelError.code === '23505') { // Unique violation code
+      if (channelError.code === '23505') {
         return res.status(409).json({ error: 'Channel with this name already exists.' });
       }
       return res.status(500).json({ error: channelError.message });
     }
 
     // 2. Add the creating user as a member of the new channel
-    const { data: memberData, error: memberError } = await supabase
+    const { data: memberData, error: memberError } = await supabase // Use req.supabase
       .from('channel_members')
       .insert([{ channel_id: channelData.id, user_id: userId }])
       .select();
@@ -157,10 +175,12 @@ app.post('/api/channels', verifyToken, async (req, res) => {
 });
 
 app.get('/api/channels', verifyToken, async (req, res) => {
+  // Now, req.supabase is the client configured with the user's JWT
+  const supabase = req.supabase; // <<< USE THE REQUEST-SCOPED CLIENT HERE <<<
   const userId = req.user.id;
 
   try {
-    const { data: channels, error } = await supabase
+    const { data: channels, error } = await supabase // Use req.supabase
       .from('channel_members')
       .select('channel_id, channels(id, name, description)')
       .eq('user_id', userId);
