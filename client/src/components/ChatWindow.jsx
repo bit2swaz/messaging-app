@@ -68,7 +68,6 @@ const ChatWindow = () => {
 
     const fetchMessages = async () => {
       try {
-        // --- CRITICAL FIX HERE: Removed comments from select string ---
         let query = supabase.from('messages')
           .select(`
             id,
@@ -77,7 +76,7 @@ const ChatWindow = () => {
             sender_id,
             receiver_id,
             channel_id,
-            profiles(username, avatar_url)
+            profiles!messages_sender_id_fkey(username, avatar_url)
           `)
           .order('created_at', { ascending: true });
 
@@ -96,10 +95,12 @@ const ChatWindow = () => {
         const { data, error } = await query;
         if (error) throw error;
 
-        // Map data to ensure senderProfile is always an object, even if null from DB
+        // Map data to consistently assign 'senderProfile' property
         const messagesWithSenderInfo = data.map(msg => ({
             ...msg,
-            senderProfile: msg.profiles || { username: 'Unknown', avatar_url: null } // Ensure senderProfile is an object
+            // Ensure profiles data is assigned to senderProfile,
+            // or provide a fallback object if profiles is null (e.g. if profile was deleted)
+            senderProfile: msg.profiles || { username: 'Unknown', avatar_url: null }
         }));
         setMessages(messagesWithSenderInfo);
         console.log('ChatWindow: Fetched messages (with sender profiles):', messagesWithSenderInfo);
@@ -143,13 +144,15 @@ const ChatWindow = () => {
           const senderProfile = senderProfileData || { username: 'Unknown', avatar_url: null };
 
           setMessages((prevMessages) => {
+            // Check if message already exists (e.g., from optimistic update)
             if (prevMessages.find(msg => msg.id === newMessagePayload.id)) {
                 return prevMessages.map(msg =>
                     msg.id === newMessagePayload.id
-                        ? { ...newMessagePayload, senderProfile, is_optimistic: false }
+                        ? { ...newMessagePayload, senderProfile, is_optimistic: false } // Update optimistic with full data
                         : msg
                 );
             }
+            // Add new message with fetched sender profile
             return [...prevMessages, { ...newMessagePayload, senderProfile }];
           });
           console.log('ChatWindow: New relevant message received via Realtime (with sender profile):', newMessagePayload);
@@ -197,7 +200,7 @@ const ChatWindow = () => {
     const optimisticMessage = {
       id: tempId,
       sender_id: currentUser.id,
-      senderProfile: {
+      senderProfile: { // Mock profile for immediate UI update
         username: currentUser.user_metadata?.username || currentUser.email,
         avatar_url: currentUser.user_metadata?.avatar_url
       },
@@ -270,7 +273,7 @@ const ChatWindow = () => {
           <div
             key={msg.id}
             className={`${styles.messageBubble} ${
-              msg.sender_id === currentUser.id ? styles.sent : styles.received // msg.sender_id is the raw ID string here
+              msg.sender_id === currentUser.id ? styles.sent : styles.received
             } ${msg.is_optimistic ? styles.optimisticMessage : ''}`}
           >
             {/* Display sender's username ONLY for received messages in channels */}
