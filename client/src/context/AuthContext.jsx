@@ -5,15 +5,15 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// THESE ARE THE CRUCIAL LOGS TO VERIFY ENVIRONMENT VARIABLES
-console.log('--- AuthContext.jsx Initialization START ---');
-console.log('VITE_SUPABASE_URL received:', supabaseUrl);
-console.log('VITE_SUPABASE_ANON_KEY received (first 5 chars):', supabaseAnonKey ? supabaseAnonKey.substring(0, 5) + '...' : 'None');
+// >>> THESE ARE THE ULTIMATE DIAGNOSTIC LOGS. THEY MUST APPEAR IN YOUR CONSOLE. <<<
+console.log('--- AuthContext.jsx Initialization START (V4 DEBUG) ---');
+console.log('V4 DEBUG: VITE_SUPABASE_URL received:', supabaseUrl);
+console.log('V4 DEBUG: VITE_SUPABASE_ANON_KEY received (first 5 chars):', supabaseAnonKey ? supabaseAnonKey.substring(0, 5) + '...' : 'None');
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('ERROR: Supabase URL or Anon Key are NOT DEFINED. Realtime will likely fail!');
+  console.error('V4 DEBUG: ERROR! Supabase URL or Anon Key are NOT DEFINED. Frontend will fail!');
 } else {
-  console.log('Supabase URL and Anon Key appear to be defined.');
+  console.log('V4 DEBUG: Supabase URL and Anon Key appear to be defined.');
 }
 
 // Create the Supabase client with realtime options
@@ -30,8 +30,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-console.log('Supabase client instance created with enhanced realtime options.');
-console.log('--- AuthContext.jsx Initialization END ---');
+console.log('V4 DEBUG: Supabase client instance created with enhanced realtime options.');
+console.log('--- AuthContext.jsx Initialization END (V4 DEBUG) ---');
+// >>> END ULTIMATE DIAGNOSTIC LOGS <<<
 
 
 const AuthContext = createContext(null);
@@ -44,24 +45,24 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     console.log('AuthContext: Custom signIn called. User state set:', userData ? userData.id : 'None');
   }, []);
-  
+
   // Custom signOut function that ensures proper cleanup
   const signOut = useCallback(async () => {
     console.log('AuthContext: Custom signOut called. Cleaning up before logout.');
-    
+
     try {
       // Pause all realtime subscriptions before signing out
       // This helps ensure clean disconnection
       supabase.realtime.setAuth(null);
-      
+
       // Perform the actual sign out
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
         console.error('AuthContext: Error during signOut:', error.message);
         throw error;
       }
-      
+
       console.log('AuthContext: User signed out successfully with cleanup.');
       return { error: null };
     } catch (err) {
@@ -79,10 +80,10 @@ export const AuthProvider = ({ children }) => {
       try {
         // Pause all realtime subscriptions
         supabase.realtime.setAuth(null);
-        
+
         // Disconnect all channels
         supabase.removeAllChannels();
-        
+
         console.log('AuthContext: Realtime connections cleaned up successfully');
       } catch (err) {
         console.error('AuthContext: Error cleaning up realtime connections:', err.message);
