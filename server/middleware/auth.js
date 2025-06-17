@@ -1,11 +1,11 @@
 // server/middleware/auth.js
-const { createClient } = require('@supabase/supabase-js'); // Still needed if you want client instance
+const { createClient } = require('@supabase/supabase-js'); // Keep for verifyToken if needed for future advanced auth checks
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL; // Used for client creation if ever needed here
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY; // Used for client creation if ever needed here
+const supabaseUrl = process.env.SUPABASE_URL; // Not directly used here anymore, but good to keep if needed
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY; // Not directly used here anymore, but good to keep if needed
 const JWT_SECRET = process.env.JWT_SECRET;
 
 console.log('--- AUTH.JS DEBUG START ---');
@@ -40,15 +40,12 @@ const verifyToken = async (req, res, next) => {
 
     req.user = {
       id: decoded.sub, // User ID from the JWT 'sub' claim
-      // Add other user metadata from JWT if needed by backend (e.g., username)
-      // username: decoded.user_metadata?.username,
-      // email: decoded.email,
     };
     console.log('VERIFYTOKEN DEBUG: JWT Decoded successfully. req.user set to:', req.user);
 
-    req.userToken = token; // Store the raw token for potential use if we ever go back to per-call RLS or need it for other services.
-    // We will use the serviceSupabase client in server.js directly for RLS-protected calls.
-    // So, req.supabase is not set here for RLS context.
+    // Removed req.userToken and req.supabase as they are no longer needed
+    // for direct backend-to-Supabase interactions that bypass RLS.
+    // Frontend will interact directly with Supabase for messages.
 
     next();
   } catch (error) {
