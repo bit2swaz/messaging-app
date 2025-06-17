@@ -5,58 +5,40 @@ import { useAuth } from '../context/AuthContext';
 import styles from './ChatWindow.module.css';
 
 const ChatWindow = () => {
-  // useParams will give us both userId and channelId if they exist in the URL
-  const { userId, channelId } = useParams(); // Now destructure both
+  // useParams now only needs userId for DM-only app
+  const { userId } = useParams();
   const { user: currentUser, supabase } = useAuth();
 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  // New state to hold the "chat partner" (recipient for DMs or channel info for groups)
-  const [chatPartner, setChatPartner] = useState(null);
+  const [chatPartner, setChatPartner] = useState(null); // Recipient for DMs
   const [error, setError] = useState(null);
   const [tempMessageError, setTempMessageError] = useState(null);
   const messagesEndRef = useRef(null);
 
-  // Determine if it's a DM or Channel chat
-  const isDM = !!userId; // True if userId exists in params
-  const isChannel = !!channelId; // True if channelId exists in params
+  const isDM = !!userId; // Always true if in this component (assuming routing handles it)
 
-  // Effect to fetch chat partner profile (recipient for DM or channel details for group)
+  // Effect to fetch chat partner profile (recipient for DM)
   useEffect(() => {
     const fetchChatPartnerDetails = async () => {
-      if (!supabase || (!userId && !channelId)) {
+      if (!supabase || !userId) { // Only need userId for DMs
         setChatPartner(null);
         return;
       }
 
-      setError(null); // Clear previous errors
+      setError(null);
 
       try {
-        if (isDM) {
-          // Fetch recipient profile for DM
-          console.log('ChatWindow: Fetching DM recipient profile:', userId);
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('id, username, avatar_url')
-            .eq('id', userId)
-            .single();
+        console.log('ChatWindow: Fetching DM recipient profile:', userId);
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, username, avatar_url')
+          .eq('id', userId)
+          .single();
 
-          if (error) throw error;
-          setChatPartner({ type: 'user', ...data }); // Add type for easier handling
-          console.log('ChatWindow: DM recipient profile fetched:', data.username);
-        } else if (isChannel) {
-          // Fetch channel details for group chat
-          console.log('ChatWindow: Fetching channel details:', channelId);
-          const { data, error } = await supabase
-            .from('channels')
-            .select('id, name, description')
-            .eq('id', channelId)
-            .single();
-
-          if (error) throw error;
-          setChatPartner({ type: 'channel', ...data }); // Add type for easier handling
-          console.log('ChatWindow: Channel details fetched:', data.name);
-        }
+        if (error) throw error;
+        setChatPartner({ type: 'user', ...data });
+        console.log('ChatWindow: DM recipient profile fetched:', data.username);
       } catch (err) {
         console.error('ChatWindow: Error fetching chat partner details:', err.message);
         setError(`Failed to load chat: ${err.message}`);
@@ -64,42 +46,47 @@ const ChatWindow = () => {
       }
     };
     fetchChatPartnerDetails();
-  }, [supabase, userId, channelId, isDM, isChannel]); // Re-run if any of these change
+  }, [supabase, userId]); // Re-run if supabase or userId changes
 
   // Effect to fetch messages and set up Realtime listener
   useEffect(() => {
-    if (!supabase || !currentUser || (!isDM && !isChannel)) return;
+    if (!supabase || !currentUser || !isDM) return; // DM-only context
 
-    setError(null); // Clear general error on chat window load
+    setError(null);
 
     const fetchMessages = async () => {
       try {
-        let query = supabase.from('messages').select('*').order('created_at', { ascending: true });
+        // Fetch messages with sender's profile for display
+        let query = supabase.from('messages')
+          .select(`
+            id,
+            content,
+            created_at,
+            sender_id,
+            receiver_id,
+            profiles!messages_sender_id_fkey(username, avatar_url) // Explicit FK for sender profile
+          `)
+          .order('created_at', { ascending: true });
 
-        if (isDM) {
-          // --- CRITICAL FIX FOR DM LEAKAGE ---
-          // Fetch messages where sender_id=currentUser.id AND receiver_id=userId
-          // OR sender_id=userId AND receiver_id=currentUser.id
-          query = query.or(
-            `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),` +
-            `and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
-          );
-          // Ensure channel_id is null for DMs
-          query = query.is('channel_id', null);
-          console.log(`ChatWindow: Fetching DM messages for ${currentUser.id} and ${userId}`);
-        } else if (isChannel) {
-          // Fetch messages for Channel
-          query = query.eq('channel_id', channelId);
-          console.log(`ChatWindow: Fetching channel messages for channel ${channelId}`);
-        } else {
-          // This case should ideally not be hit due to initial check
-          console.warn('ChatWindow: Neither DM nor Channel ID present for message fetch.');
-          return;
-        }
+        // Filter messages for this specific DM conversation
+        query = query.or(
+          `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),` +
+          `and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
+        );
+        // Ensure channel_id is null for DMs (important for schema check constraint)
+        query = query.is('channel_id', null);
+        console.log(`ChatWindow: Fetching DM messages for ${currentUser.id} and ${userId}`);
 
         const { data, error } = await query;
         if (error) throw error;
-        setMessages(data);
+
+        // Map data to consistently assign 'senderProfile' property
+        const messagesWithSenderInfo = data.map(msg => ({
+            ...msg,
+            senderProfile: msg.profiles || { username: 'Unknown', avatar_url: null }
+        }));
+        setMessages(messagesWithSenderInfo);
+        console.log('ChatWindow: Fetched messages (with sender profiles):', messagesWithSenderInfo);
       } catch (err) {
         console.error('ChatWindow: Error fetching initial messages from Supabase:', err.message);
         setError(`Failed to load messages: ${err.message}`);
@@ -109,37 +96,43 @@ const ChatWindow = () => {
 
     fetchMessages();
 
-    // Determine Realtime channel name based on chat type
-    const realtimeChannelName = isDM
-      ? `dm_${[currentUser.id, userId].sort().join('_')}` // DM channel name
-      : `channel_${channelId}`; // Channel chat name
+    // Realtime channel name for DMs
+    const realtimeChannelName = `dm_${[currentUser.id, userId].sort().join('_')}`;
 
     console.log(`ChatWindow: Subscribing to Realtime channel: ${realtimeChannelName}`);
     const channel = supabase
       .channel(realtimeChannelName)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
         const newMessagePayload = payload.new;
         let isRelevant = false;
 
-        if (isDM) {
-          // Check if message is relevant to the current DM chat
-          isRelevant =
-            ((newMessagePayload.sender_id === currentUser.id && newMessagePayload.receiver_id === userId) ||
-            (newMessagePayload.sender_id === userId && newMessagePayload.receiver_id === currentUser.id)) &&
-            newMessagePayload.channel_id === null; // Must be a DM (channel_id is null)
-        } else if (isChannel) {
-          // Check if message is relevant to the current Channel chat
-          isRelevant = newMessagePayload.channel_id === channelId;
-        }
+        // Check if message is relevant to the current DM chat
+        isRelevant =
+          ((newMessagePayload.sender_id === currentUser.id && newMessagePayload.receiver_id === userId) ||
+          (newMessagePayload.sender_id === userId && newMessagePayload.receiver_id === currentUser.id)) &&
+          newMessagePayload.channel_id === null; // Must be a DM
 
         if (isRelevant) {
+          // For Realtime: fetch the sender's profile specifically for the new message
+          const { data: senderProfileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('username, avatar_url')
+            .eq('id', newMessagePayload.sender_id)
+            .single();
+
+          const senderProfile = senderProfileData || { username: 'Unknown', avatar_url: null };
+
           setMessages((prevMessages) => {
-            if (!prevMessages.find(msg => msg.id === newMessagePayload.id)) {
-              return [...prevMessages, newMessagePayload];
+            if (prevMessages.find(msg => msg.id === newMessagePayload.id)) {
+                return prevMessages.map(msg =>
+                    msg.id === newMessagePayload.id
+                        ? { ...newMessagePayload, senderProfile, is_optimistic: false }
+                        : msg
+                );
             }
-            return prevMessages;
+            return [...prevMessages, { ...newMessagePayload, senderProfile }];
           });
-          console.log('ChatWindow: New relevant message received via Realtime:', newMessagePayload);
+          console.log('ChatWindow: New relevant message received via Realtime (with sender profile):', newMessagePayload);
         } else {
           console.log('ChatWindow: Realtime message received but not relevant to current chat:', newMessagePayload);
         }
@@ -159,7 +152,7 @@ const ChatWindow = () => {
       console.log(`ChatWindow: Unsubscribing from Realtime channel: ${realtimeChannelName}`);
       supabase.removeChannel(channel);
     };
-  }, [supabase, currentUser, userId, channelId, isDM, isChannel]); // Dependencies: Re-run if chat type or IDs change
+  }, [supabase, currentUser, userId, isDM]); // Dependencies: Re-run if chat type or IDs change
 
   // Effect for auto-scrolling to the bottom of messages
   useEffect(() => {
@@ -176,7 +169,7 @@ const ChatWindow = () => {
       setTempMessageError('Message cannot be empty.');
       return;
     }
-    if (!currentUser || (!isDM && !isChannel) || (!isDM && !chatPartner?.id) || (!isChannel && !chatPartner?.id)) {
+    if (!currentUser || !isDM || !chatPartner?.id) { // DM-only validation
       setTempMessageError('User or chat partner not defined. Please refresh.');
       return;
     }
@@ -185,12 +178,15 @@ const ChatWindow = () => {
     const optimisticMessage = {
       id: tempId,
       sender_id: currentUser.id,
+      senderProfile: { // Mock profile for immediate UI update
+        username: currentUser.user_metadata?.username || currentUser.email,
+        avatar_url: currentUser.user_metadata?.avatar_url
+      },
       content: newMessage.trim(),
       created_at: new Date().toISOString(),
       is_optimistic: true,
-      // Conditionally add receiver_id or channel_id
-      ...(isDM && { receiver_id: userId }),
-      ...(isChannel && { channel_id: channelId }),
+      receiver_id: userId, // Always receiver_id for DMs
+      channel_id: null, // Always null for DMs
     };
 
     setMessages((prevMessages) => [...prevMessages, optimisticMessage]);
@@ -200,9 +196,8 @@ const ChatWindow = () => {
       const messageToInsert = {
         sender_id: currentUser.id,
         content: optimisticMessage.content,
-        // Conditionally add receiver_id or channel_id for insertion
-        ...(isDM && { receiver_id: userId }),
-        ...(isChannel && { channel_id: channelId }),
+        receiver_id: userId, // Always receiver_id for DMs
+        channel_id: null, // Always null for DMs
       };
 
       const { data, error } = await supabase
@@ -213,13 +208,6 @@ const ChatWindow = () => {
       if (error) {
         throw error;
       }
-
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg.id === tempId ? { ...data[0], is_optimistic: false } : msg
-        )
-      );
-
     } catch (err) {
       console.error('ChatWindow: Caught error in handleSendMessage:', err.message);
       setError(`Failed to send message: ${err.message}`);
@@ -236,15 +224,11 @@ const ChatWindow = () => {
     return <div className={styles.chatWindowLoading}>Loading chat...</div>;
   }
 
-  // Determine header display based on chat type
-  const chatHeaderName = isDM ? chatPartner.username : chatPartner.name;
-  const chatHeaderAvatar = isDM
-    ? chatPartner.avatar_url || `https://placehold.co/40x40/5865F2/FFFFFF?text=${chatPartner.username ? chatPartner.username[0].toUpperCase() : '?'}`
-    : `https://placehold.co/40x40/7289DA/FFFFFF?text=#`; // Generic channel avatar
+  // Determine header display based on chat type (always DM now)
+  const chatHeaderName = chatPartner.username;
+  const chatHeaderAvatar = chatPartner.avatar_url || `https://placehold.co/40x40/5865F2/FFFFFF?text=${chatPartner.username ? chatPartner.username[0].toUpperCase() : '?'}`;
 
-  const chatPlaceholder = isDM
-    ? `Message @${chatPartner.username}...`
-    : `Message #${chatHeaderName}...`; // Use chatHeaderName for channels
+  const chatPlaceholder = `Message @${chatHeaderName}...`;
 
   return (
     <div className={styles.chatWindowContainer}>
@@ -268,6 +252,7 @@ const ChatWindow = () => {
               msg.sender_id === currentUser.id ? styles.sent : styles.received
             } ${msg.is_optimistic ? styles.optimisticMessage : ''}`}
           >
+            {/* Removed conditional channel-specific sender display - DMs don't typically need it */}
             <p className={styles.messageContent}>{msg.content}</p>
             <span className={styles.messageTimestamp}>
               {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
