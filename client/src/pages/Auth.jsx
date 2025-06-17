@@ -10,7 +10,7 @@ const Auth = () => {
   const [username, setUsername] = useState('');
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
-  const { signIn, supabase } = useAuth(); // Destructure supabase client here
+  const { user, signIn, supabase } = useAuth(); // Destructure supabase client here
 
   // We explicitly removed the useEffect for navigation here.
   // App.jsx is now the sole component handling redirection based on the 'user' context.
