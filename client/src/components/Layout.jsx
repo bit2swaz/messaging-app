@@ -3,7 +3,6 @@ import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import UserList from './UserList';
-import ChannelList from './ChannelList'; // Import the new ChannelList component
 import styles from './Layout.module.css';
 
 const Layout = () => {
