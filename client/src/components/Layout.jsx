@@ -47,8 +47,6 @@ const Layout = () => {
         <nav className={styles.navigation}>
           {/* UserList component for DMs */}
           <UserList />
-          {/* NEW: ChannelList component for group channels */}
-          <ChannelList />
         </nav>
       </aside>
 
