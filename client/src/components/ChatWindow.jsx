@@ -77,8 +77,13 @@ const ChatWindow = () => {
         let query = supabase.from('messages').select('*').order('created_at', { ascending: true });
 
         if (isDM) {
-          // Fetch messages for Direct Message
-          query = query.or(`sender_id.eq.${currentUser.id},receiver_id.eq.${userId},sender_id.eq.${userId},receiver_id.eq.${currentUser.id}`);
+          // --- CRITICAL FIX FOR DM LEAKAGE ---
+          // Fetch messages where sender_id=currentUser.id AND receiver_id=userId
+          // OR sender_id=userId AND receiver_id=currentUser.id
+          query = query.or(
+            `and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),` +
+            `and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`
+          );
           // Ensure channel_id is null for DMs
           query = query.is('channel_id', null);
           console.log(`ChatWindow: Fetching DM messages for ${currentUser.id} and ${userId}`);
