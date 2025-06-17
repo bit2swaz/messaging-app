@@ -99,6 +99,8 @@
   border-bottom-left-radius: 2px; /* Small corner for tail */
 }
 
+/* Removed specific styles for .messageSenderInfo, .messageSenderAvatar, .messageSenderUsername */
+
 .messageContent {
   margin: 0;
   font-size: 0.95em;
