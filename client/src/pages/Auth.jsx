@@ -1,5 +1,5 @@
 // client/src/pages/Auth.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import styles from './Auth.module.css';
 
