@@ -1,59 +1,67 @@
-// client/src/App.jsx
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
-import Auth from './pages/Auth';
-import Layout from './components/Layout';
-import Home from './pages/Home';
-import ChatWindow from './components/ChatWindow';
+    // client/src/App.jsx
+    import React, { useEffect } from 'react';
+    import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+    import { AuthProvider, useAuth } from './context/AuthContext';
+    import Auth from './pages/Auth';
+    import MainLayout from './components/MainLayout';
+    import './App.css'; // Global CSS
 
-import './App.module.css';
+    const AppContent = () => {
+      const { user, loading } = useAuth();
+      const navigate = useNavigate();
+      const location = useLocation();
 
-function App() {
-  const { user, loading } = useAuth();
+      // --- CRITICAL DEBUG LOG ---
+      useEffect(() => {
+        console.log('App.jsx: VITE_API_BASE_URL (from import.meta.env):', import.meta.env.VITE_API_BASE_URL);
+      }, []);
+      // --- END CRITICAL DEBUG LOG ---
 
-  console.log('App.jsx: Rendering App. User:', user ? user.id : 'None', 'Loading:', loading);
 
-  if (loading) {
-    console.log('App.jsx: Showing loading container.');
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        width: '100%',
-        backgroundColor: '#36393F',
-        color: '#DCDEE1',
-        fontSize: '1.5em'
-      }}>
-        Loading application...
-      </div>
-    );
-  }
+      useEffect(() => {
+        console.log('App.jsx: Auth state changed. User:', user ? user.id : 'null', 'Loading:', loading, 'Path:', location.pathname);
 
-  console.log('App.jsx: Auth check complete. User exists:', !!user);
+        if (loading) {
+          // Still loading auth state, do nothing yet
+          return;
+        }
 
-  return (
-    <div className="app-container">
-      <Routes>
-        <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <Auth />} />
+        if (user) {
+          // User is logged in
+          if (location.pathname === '/' || location.pathname === '/auth') {
+            console.log('App.jsx: User logged in, redirecting to /home');
+            navigate('/home');
+          }
+        } else {
+          // User is NOT logged in
+          if (location.pathname !== '/' && location.pathname !== '/auth') {
+            console.log('App.jsx: User not logged in, redirecting to /');
+            navigate('/');
+          }
+        }
+      }, [user, loading, navigate, location.pathname]);
 
-        <Route element={user ? <Layout /> : <Navigate to="/auth" replace />}>
-          {/* Default home route inside the layout - could be a welcome or user profile view */}
-          <Route path="/home" element={<Home />} />
-          {/* Nested route for direct messages with a specific user */}
-          <Route path="/home/chat/:userId" element={<ChatWindow />} />
-          {/* NEW: Nested route for channel messages with a specific channel */}
-          <Route path="/home/channel/:channelId" element={<ChatWindow />} />
-          {/* Default redirect when logged in, if no specific sub-route is hit */}
-          <Route path="/" element={<Navigate to="/home" replace />} />
-        </Route>
+      return (
+        <Routes>
+          <Route path="/" element={<Auth />} />
+          <Route path="/auth" element={<Auth />} />
+          {user ? (
+            <Route path="/home/*" element={<MainLayout />} />
+          ) : (
+            // Redirect any /home access when not logged in to Auth page
+            <Route path="/home/*" element={<Auth />} />
+          )}
+        </Routes>
+      );
+    };
 
-        <Route path="*" element={<Navigate to={user ? "/home" : "/auth"} replace />} />
-      </Routes>
-    </div>
-  );
-}
+    function App() {
+      return (
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      );
+    }
 
-export default App;
+    export default App;
+    
