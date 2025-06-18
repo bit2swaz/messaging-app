@@ -1,5 +1,5 @@
 // client/src/pages/Auth.jsx
-import React, { useState } => {
+import React, { useState } from 'react'; // <--- CRITICAL FIX: Changed '=>' to 'from'
 import { useAuth } from '../context/AuthContext';
 import styles from './Auth.module.css';
 
@@ -10,10 +10,7 @@ const Auth = () => {
   const [username, setUsername] = useState('');
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
-  const { user, signIn, supabase } = useAuth(); // Destructure supabase client here
-
-  // We explicitly removed the useEffect for navigation here.
-  // App.jsx is now the sole component handling redirection based on the 'user' context.
+  const { user, signIn, supabase } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,14 +20,13 @@ const Auth = () => {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
     console.log('Auth.jsx: Submitting form. Type:', isRegister ? 'Register' : 'Login', 'Email:', email);
-    console.log('Auth.jsx: API_BASE_URL:', API_BASE_URL); // Debugging: Check the base URL
+    console.log('Auth.jsx: API_BASE_URL:', API_BASE_URL);
 
     try {
-      // --- CRITICAL FIX: Added /api prefix to the endpoints ---
       const endpoint = isRegister ? `${API_BASE_URL}/api/auth/register` : `${API_BASE_URL}/api/auth/login`;
       const body = isRegister ? { email, password, username } : { email, password };
 
-      console.log('Auth.jsx: Constructed endpoint:', endpoint); // Debugging: Check the full URL
+      console.log('Auth.jsx: Constructed endpoint:', endpoint);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -42,14 +38,12 @@ const Auth = () => {
 
       console.log('Auth.jsx: Fetch response received. Status:', response.status, 'OK:', response.ok);
 
-      // Check if response is JSON before trying to parse
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const textError = await response.text();
         console.error('Auth.jsx: Received non-JSON response:', textError);
         throw new Error(`Expected JSON response, but received: ${textError.substring(0, 100)}... (Status: ${response.status})`);
       }
-
 
       const data = await response.json();
 
@@ -64,7 +58,7 @@ const Auth = () => {
       setMessage(data.message);
       console.log('Auth.jsx: Success message received:', data.message);
 
-      if (!isRegister && data.session) { // CRITICAL: Check for data.session
+      if (!isRegister && data.session) {
         console.log('Auth.jsx: Login successful. Attempting to set Supabase session explicitly.');
         const { error: sessionSetError } = await supabase.auth.setSession(data.session);
 
@@ -79,7 +73,7 @@ const Auth = () => {
 
       } else if (isRegister) {
         console.log('Auth.jsx: Registration success. User needs to login.');
-        setIsRegister(false); // Switch to login form
+        setIsRegister(false);
         setEmail('');
         setPassword('');
         setUsername('');
@@ -141,5 +135,3 @@ const Auth = () => {
 };
 
 export default Auth;
-}
-
