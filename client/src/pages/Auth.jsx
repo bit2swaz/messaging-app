@@ -1,5 +1,5 @@
 // client/src/pages/Auth.jsx
-import React, { useState } from 'react';
+import React, { useState } => {
 import { useAuth } from '../context/AuthContext';
 import styles from './Auth.module.css';
 
@@ -23,10 +23,14 @@ const Auth = () => {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
     console.log('Auth.jsx: Submitting form. Type:', isRegister ? 'Register' : 'Login', 'Email:', email);
+    console.log('Auth.jsx: API_BASE_URL:', API_BASE_URL); // Debugging: Check the base URL
 
     try {
-      const endpoint = isRegister ? `${API_BASE_URL}/auth/register` : `${API_BASE_URL}/auth/login`;
+      // --- CRITICAL FIX: Added /api prefix to the endpoints ---
+      const endpoint = isRegister ? `${API_BASE_URL}/api/auth/register` : `${API_BASE_URL}/api/auth/login`;
       const body = isRegister ? { email, password, username } : { email, password };
+
+      console.log('Auth.jsx: Constructed endpoint:', endpoint); // Debugging: Check the full URL
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -37,6 +41,15 @@ const Auth = () => {
       });
 
       console.log('Auth.jsx: Fetch response received. Status:', response.status, 'OK:', response.ok);
+
+      // Check if response is JSON before trying to parse
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const textError = await response.text();
+        console.error('Auth.jsx: Received non-JSON response:', textError);
+        throw new Error(`Expected JSON response, but received: ${textError.substring(0, 100)}... (Status: ${response.status})`);
+      }
+
 
       const data = await response.json();
 
@@ -53,26 +66,21 @@ const Auth = () => {
 
       if (!isRegister && data.session) { // CRITICAL: Check for data.session
         console.log('Auth.jsx: Login successful. Attempting to set Supabase session explicitly.');
-        // Set the full session object explicitly for the Supabase client
-        // This is the most reliable way to ensure the client is aware of the session.
         const { error: sessionSetError } = await supabase.auth.setSession(data.session);
 
         if (sessionSetError) {
           console.error('Auth.jsx: Error setting Supabase session explicitly:', sessionSetError.message);
           setError(`Login successful, but session setup failed: ${sessionSetError.message}`);
-          return; // Stop here if session setup fails
+          return;
         }
 
-        // After setSession, onAuthStateChange in AuthContext will be triggered
-        // and handle setting the user, which App.jsx will react to for navigation.
-        // We can still call signIn here for immediate UI update in case onAuthStateChange is slightly delayed.
-        signIn(data.user); // data.user is also returned for convenience
+        signIn(data.user);
         console.log('Auth.jsx: Supabase session explicitly set. AuthContext updated.');
 
       } else if (isRegister) {
         console.log('Auth.jsx: Registration success. User needs to login.');
         setIsRegister(false); // Switch to login form
-        setEmail(''); // Clear inputs for fresh login
+        setEmail('');
         setPassword('');
         setUsername('');
       } else {
@@ -133,3 +141,5 @@ const Auth = () => {
 };
 
 export default Auth;
+}
+
